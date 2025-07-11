@@ -1,13 +1,27 @@
-from sqlmodel import SQLModel, create_engine
-from sqlmodel.ext.asyncio.session import AsyncSession, AsyncEngine
-from sqlalchemy.orm import sessionmaker
+import os
+import re
+from dotenv import load_dotenv
 from typing import AsyncGenerator
+from sqlmodel import SQLModel
+from sqlalchemy.ext.asyncio import create_async_engine
+from sqlalchemy.orm import sessionmaker
+from sqlmodel.ext.asyncio.session import AsyncSession
 
-# The database URL is for a SQLite database stored in a file named "database.db"
-DATABASE_URL = "sqlite+aiosqlite:///database.db"
+load_dotenv()
 
-# Create an async engine
-engine = AsyncEngine(create_engine(DATABASE_URL, echo=True, future=True))
+# The database URL is read from the .env file
+DATABASE_URL = os.getenv("DATABASE_URL")
+
+if not DATABASE_URL:
+    raise ValueError("No DATABASE_URL found in environment variables")
+
+# The user's snippet uses a regex to ensure the connection string is async-compatible.
+# This is a robust way to handle it.
+async_db_url = re.sub(r"^(postgresql)://", r"\1+asyncpg://", DATABASE_URL)
+
+# Create an async engine using the new URL
+engine = create_async_engine(async_db_url, echo=True, future=True)
+
 
 async def init_db():
     """
