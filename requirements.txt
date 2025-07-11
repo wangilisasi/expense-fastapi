@@ -6,6 +6,7 @@ colorama==0.4.6
 dnspython==2.7.0
 email_validator==2.2.0
 fastapi==0.115.14
+gunicorn==22.0.0
 greenlet==3.2.3
 h11==0.16.0
 httptools==0.6.4
