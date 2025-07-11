@@ -17,7 +17,7 @@ class Expense(ExpenseBase):
     id: int
     trackerId: int
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class ExpenseTrackerBase(BaseModel):
     startDate: date
@@ -33,7 +33,7 @@ class ExpenseTracker(ExpenseTrackerBase):
     id: int
     expenses: List[Expense] = []
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 # --- Schemas with Relationships ---
