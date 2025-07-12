@@ -2,9 +2,9 @@ from fastapi import FastAPI, HTTPException, Response, status, Depends
 from typing import List
 from sqlalchemy.orm import Session, selectinload
 
-from database import engine, get_db
-import models
-import schemas
+from app.database import engine, get_db
+import app.models as models
+import app.schemas as schemas
 
 models.Base.metadata.create_all(bind=engine)
 
