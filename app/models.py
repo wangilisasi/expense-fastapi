@@ -6,7 +6,7 @@ from app.database import Base
 class ExpenseTracker(Base):
     __tablename__ = "expensetracker"
 
-    id = Column(Integer, primary_key=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
     startDate = Column(Date, nullable=False)
     endDate = Column(Date, nullable=False)
     budget = Column(Float, nullable=False)
@@ -18,7 +18,7 @@ class ExpenseTracker(Base):
 class Expense(Base):
     __tablename__ = "expense"
 
-    id = Column(Integer, primary_key=True)
+    id = Column(Integer, primary_key=True, autoincrement=True)
     description = Column(String, nullable=False)
     amount = Column(Float, nullable=False)
     date = Column(Date, nullable=False)
