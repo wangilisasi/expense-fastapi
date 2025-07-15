@@ -3,6 +3,17 @@ from sqlalchemy.orm import relationship
 
 from app.database import Base
 
+
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    username = Column(String, unique=True, nullable=False, index=True)
+    email = Column(String, unique=True, nullable=False, index=True)
+    hashed_password = Column(String, nullable=False)
+
+    expense_trackers = relationship("ExpenseTracker", back_populates="user")
+
 class ExpenseTracker(Base):
     __tablename__ = "expensetracker"
 
@@ -12,8 +23,10 @@ class ExpenseTracker(Base):
     budget = Column(Float, nullable=False)
     name = Column(String, nullable=False)
     description = Column(String, nullable=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
 
     expenses = relationship("Expense", back_populates="tracker")
+    user = relationship("User", back_populates="expense_trackers")
 
 class Expense(Base):
     __tablename__ = "expense"
