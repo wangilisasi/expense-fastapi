@@ -139,7 +139,8 @@ def delete_expense(id: int, current_user: models.User = Depends(auth.get_current
         models.ExpenseTracker.user_id == current_user.id
     ).first()
     if not tracker:
-        raise HTTPException(status_code=404, detail="Expense not found")
+        # The expense exists but the current user does not own the associated tracker
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to delete this expense")
     
     db.delete(expense)
     db.commit()
