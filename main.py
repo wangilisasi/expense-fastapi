@@ -74,19 +74,6 @@ def get_current_user_info(current_user: models.User = Depends(auth.get_current_a
 @app.get("/trackers", response_model=List[schemas.ExpenseTracker])
 def get_trackers(current_user: models.User = Depends(auth.get_current_active_user), db: Session = Depends(get_db)):
     try:
-        # Verify user exists and is active
-        if not current_user:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="User authentication required"
-            )
-        
-        if not current_user.is_active:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="User account is inactive"
-            )
-        
         # Query trackers for the current user
         trackers = db.query(models.ExpenseTracker).filter(
             models.ExpenseTracker.user_id == current_user.id
@@ -95,9 +82,6 @@ def get_trackers(current_user: models.User = Depends(auth.get_current_active_use
         # Return trackers (empty list if none found)
         return trackers
         
-    except HTTPException:
-        # Re-raise HTTP exceptions as-is
-        raise
     except Exception as e:
         # Handle unexpected database or server errors
         #log error
