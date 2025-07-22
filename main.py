@@ -100,6 +100,8 @@ def get_trackers(current_user: models.User = Depends(auth.get_current_active_use
         raise
     except Exception as e:
         # Handle unexpected database or server errors
+        #log error
+        print(e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An error occurred while retrieving trackers. Please try again later."
