@@ -86,40 +86,50 @@ def create_tracker(tracker: schemas.ExpenseTrackerCreate, current_user: models.U
 
 @app.get("/trackers/{id}", response_model=schemas.ExpenseTrackerWithExpenses)
 def get_tracker_details(id: int, current_user: models.User = Depends(auth.get_current_active_user), db: Session = Depends(get_db)):
+    # First check if tracker exists at all
     tracker = (
         db.query(models.ExpenseTracker)
-        .filter(models.ExpenseTracker.id == id, models.ExpenseTracker.user_id == current_user.id)
+        .filter(models.ExpenseTracker.id == id)
         .options(selectinload(models.ExpenseTracker.expenses))
         .first()
     )
     if not tracker:
         raise HTTPException(status_code=404, detail="Tracker not found")
+    
+    # Then verify the tracker belongs to the current user
+    if tracker.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to access this tracker")
+    
     return tracker
 
 # --- Expense Endpoints ---
 
 @app.get("/trackers/{trackerId}/expenses", response_model=List[schemas.Expense])
 def get_expenses_for_tracker(trackerId: int, current_user: models.User = Depends(auth.get_current_active_user), db: Session = Depends(get_db)):
-    # First verify the tracker belongs to the current user
-    tracker = db.query(models.ExpenseTracker).filter(
-        models.ExpenseTracker.id == trackerId, 
-        models.ExpenseTracker.user_id == current_user.id
-    ).first()
+    # First check if tracker exists at all
+    tracker = db.query(models.ExpenseTracker).filter(models.ExpenseTracker.id == trackerId).first()
     if not tracker:
         raise HTTPException(status_code=404, detail="Tracker not found")
+    
+    # Then verify the tracker belongs to the current user
+    if tracker.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to access this tracker")
     
     expenses = db.query(models.Expense).filter(models.Expense.trackerId == trackerId).all()
     return expenses
 
 @app.post("/expenses", response_model=schemas.Expense, status_code=status.HTTP_201_CREATED)
 def add_expense(expense_in: schemas.ExpenseCreate, current_user: models.User = Depends(auth.get_current_active_user), db: Session = Depends(get_db)):
-    # Verify tracker exists and belongs to the current user
+    # First check if tracker exists at all
     tracker = db.query(models.ExpenseTracker).filter(
-        models.ExpenseTracker.id == expense_in.trackerId,
-        models.ExpenseTracker.user_id == current_user.id
+        models.ExpenseTracker.id == expense_in.trackerId
     ).first()
     if not tracker:
-        raise HTTPException(status_code=404, detail="Tracker not found for this expense")
+        raise HTTPException(status_code=404, detail="Tracker not found")
+    
+    # Then verify the tracker belongs to the current user
+    if tracker.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to add expenses to this tracker")
 
     db_expense = models.Expense(**expense_in.model_dump())
     db.add(db_expense)
