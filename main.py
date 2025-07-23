@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException, Response, status, Depends
 from fastapi.security import OAuth2PasswordRequestForm
 from typing import List
-from datetime import timedelta
+from datetime import timedelta, date
 from sqlalchemy.orm import Session, selectinload
 
 from app.database import engine, get_db
@@ -83,9 +83,6 @@ def get_trackers(current_user: models.User = Depends(auth.get_current_active_use
         return trackers
         
     except Exception as e:
-        # Handle unexpected database or server errors
-        #log error
-        print(e)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="An error occurred while retrieving trackers. Please try again later."
@@ -116,6 +113,46 @@ def get_tracker_details(id: int, current_user: models.User = Depends(auth.get_cu
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to access this tracker")
     
     return tracker
+
+@app.get("/trackers/{id}/stats", response_model=schemas.ExpenseTrackerStats)
+def get_tracker_stats(id: int, current_user: models.User = Depends(auth.get_current_active_user), db: Session = Depends(get_db)):
+    # First check if tracker exists and belongs to the current user
+    tracker = (
+        db.query(models.ExpenseTracker)
+        .filter(models.ExpenseTracker.id == id)
+        .options(selectinload(models.ExpenseTracker.expenses))
+        .first()
+    )
+    if not tracker:
+        raise HTTPException(status_code=404, detail="Tracker not found")
+    
+    # Verify the tracker belongs to the current user
+    if tracker.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to access this tracker")
+    
+    # Calculate stats
+    today = date.today()
+    
+    # Calculate remaining days (0 if end date has passed)
+    remaining_days = max(0, (tracker.endDate - today).days)
+    
+    # Calculate total period in days
+    total_period_days = (tracker.endDate - tracker.startDate).days + 1  # +1 to include both start and end dates
+    
+    # Calculate target expenditure per day
+    target_expenditure_per_day = tracker.budget / total_period_days if total_period_days > 0 else 0
+    
+    # Calculate total expenditure by summing all expenses
+    total_expenditure = sum(expense.amount for expense in tracker.expenses)
+    
+    return schemas.ExpenseTrackerStats(
+        start_date=tracker.startDate,
+        end_date=tracker.endDate,
+        budget=tracker.budget,
+        remaining_days=remaining_days,
+        target_expenditure_per_day=target_expenditure_per_day,
+        total_expenditure=total_expenditure
+    )
 
 # --- Expense Endpoints ---
 
