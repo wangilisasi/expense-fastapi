@@ -138,12 +138,12 @@ def get_tracker_stats(id: int, current_user: models.User = Depends(auth.get_curr
     
     # Calculate total period in days
     #total_period_days = (tracker.endDate - tracker.startDate).days + 1  # +1 to include both start and end dates
-    
-    # Calculate target expenditure per day (rounded to 2 decimal places)
-    target_expenditure_per_day = round(tracker.budget / remaining_days if remaining_days > 0 else 0, 2)
-    
+       
     # Calculate total expenditure by summing all expenses (rounded to 2 decimal places)
     total_expenditure = round(sum(expense.amount for expense in tracker.expenses), 2)
+    # Calculate target expenditure per day (rounded to 2 decimal places)
+    target_expenditure_per_day = round((tracker.budget-total_expenditure) / remaining_days if remaining_days > 0 else 0, 2)
+ 
     
     return schemas.ExpenseTrackerStats(
         start_date=tracker.startDate,
