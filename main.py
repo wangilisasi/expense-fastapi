@@ -96,6 +96,27 @@ def get_tracker_details(id: int, current_user: models.User = Depends(auth.get_cu
         raise HTTPException(status_code=404, detail="Tracker not found")
     return tracker
 
+@app.patch("/trackers/{id}", response_model=schemas.ExpenseTracker)
+def update_tracker(id: int, tracker_update: schemas.ExpenseTrackerUpdate, current_user: models.User = Depends(auth.get_current_active_user), db: Session = Depends(get_db)):
+    """Update an expense tracker (PATCH - only specified fields)"""
+    # Get the existing tracker
+    db_tracker = db.query(models.ExpenseTracker).filter(
+        models.ExpenseTracker.id == id,
+        models.ExpenseTracker.user_id == current_user.id
+    ).first()
+    
+    if not db_tracker:
+        raise HTTPException(status_code=404, detail="Tracker not found")
+    
+    # Update only the provided fields
+    update_data = tracker_update.model_dump(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(db_tracker, field, value)
+    
+    db.commit()
+    db.refresh(db_tracker)
+    return db_tracker
+
 # --- Expense Endpoints ---
 
 @app.get("/trackers/{trackerId}/expenses", response_model=List[schemas.Expense])
