@@ -75,3 +75,15 @@ class ExpenseTracker(ExpenseTrackerBase):
 class ExpenseTrackerWithExpenses(ExpenseTracker):
     expenses: List[Expense] = []
 
+# --- Stats Schema ---
+
+class ExpenseTrackerStats(BaseModel):
+    start_date: date
+    end_date: date
+    budget: float
+    remaining_days: int
+    target_expenditure_per_day: float
+    total_expenditure: float
+    class Config:
+        from_attributes = True
+

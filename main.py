@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException, Response, status, Depends
 from fastapi.security import OAuth2PasswordRequestForm
 from typing import List
-from datetime import timedelta
+from datetime import timedelta, date
 from sqlalchemy.orm import Session, selectinload
 
 from app.database import engine, get_db
@@ -73,8 +73,20 @@ def get_current_user_info(current_user: models.User = Depends(auth.get_current_a
 
 @app.get("/trackers", response_model=List[schemas.ExpenseTracker])
 def get_trackers(current_user: models.User = Depends(auth.get_current_active_user), db: Session = Depends(get_db)):
-    trackers = db.query(models.ExpenseTracker).filter(models.ExpenseTracker.user_id == current_user.id).all()
-    return trackers
+    try:
+        # Query trackers for the current user
+        trackers = db.query(models.ExpenseTracker).filter(
+            models.ExpenseTracker.user_id == current_user.id
+        ).all()
+        
+        # Return trackers (empty list if none found)
+        return trackers
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="An error occurred while retrieving trackers. Please try again later."
+        )
 
 @app.post("/trackers", response_model=schemas.ExpenseTracker)
 def create_tracker(tracker: schemas.ExpenseTrackerCreate, current_user: models.User = Depends(auth.get_current_active_user), db: Session = Depends(get_db)):
@@ -86,14 +98,20 @@ def create_tracker(tracker: schemas.ExpenseTrackerCreate, current_user: models.U
 
 @app.get("/trackers/{id}", response_model=schemas.ExpenseTrackerWithExpenses)
 def get_tracker_details(id: int, current_user: models.User = Depends(auth.get_current_active_user), db: Session = Depends(get_db)):
+    # First check if tracker exists at all
     tracker = (
         db.query(models.ExpenseTracker)
-        .filter(models.ExpenseTracker.id == id, models.ExpenseTracker.user_id == current_user.id)
+        .filter(models.ExpenseTracker.id == id)
         .options(selectinload(models.ExpenseTracker.expenses))
         .first()
     )
     if not tracker:
         raise HTTPException(status_code=404, detail="Tracker not found")
+    
+    # Then verify the tracker belongs to the current user
+    if tracker.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to access this tracker")
+    
     return tracker
 
 @app.patch("/trackers/{id}", response_model=schemas.ExpenseTracker)
@@ -117,30 +135,74 @@ def update_tracker(id: int, tracker_update: schemas.ExpenseTrackerUpdate, curren
     db.refresh(db_tracker)
     return db_tracker
 
+@app.get("/trackers/{id}/stats", response_model=schemas.ExpenseTrackerStats)
+def get_tracker_stats(id: int, current_user: models.User = Depends(auth.get_current_active_user), db: Session = Depends(get_db)):
+    # First check if tracker exists and belongs to the current user
+    tracker = (
+        db.query(models.ExpenseTracker)
+        .filter(models.ExpenseTracker.id == id)
+        .options(selectinload(models.ExpenseTracker.expenses))
+        .first()
+    )
+    if not tracker:
+        raise HTTPException(status_code=404, detail="Tracker not found")
+    
+    # Verify the tracker belongs to the current user
+    if tracker.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to access this tracker")
+    
+    # Calculate stats
+    today = date.today()
+    
+    # Calculate remaining days (0 if end date has passed)
+    remaining_days = max(0, (tracker.endDate - today).days)+1
+    
+    # Calculate total period in days
+    #total_period_days = (tracker.endDate - tracker.startDate).days + 1  # +1 to include both start and end dates
+       
+    # Calculate total expenditure by summing all expenses (rounded to 2 decimal places)
+    total_expenditure = round(sum(expense.amount for expense in tracker.expenses), 2)
+    # Calculate target expenditure per day (rounded to 2 decimal places)
+    target_expenditure_per_day = round((tracker.budget-total_expenditure) / remaining_days if remaining_days > 0 else 0, 2)
+
+    
+    return schemas.ExpenseTrackerStats(
+        start_date=tracker.startDate,
+        end_date=tracker.endDate,
+        budget=round(tracker.budget, 2),
+        remaining_days=remaining_days,
+        target_expenditure_per_day=target_expenditure_per_day,
+        total_expenditure=total_expenditure
+    )
+
 # --- Expense Endpoints ---
 
 @app.get("/trackers/{trackerId}/expenses", response_model=List[schemas.Expense])
 def get_expenses_for_tracker(trackerId: int, current_user: models.User = Depends(auth.get_current_active_user), db: Session = Depends(get_db)):
-    # First verify the tracker belongs to the current user
-    tracker = db.query(models.ExpenseTracker).filter(
-        models.ExpenseTracker.id == trackerId, 
-        models.ExpenseTracker.user_id == current_user.id
-    ).first()
+    # First check if tracker exists at all
+    tracker = db.query(models.ExpenseTracker).filter(models.ExpenseTracker.id == trackerId).first()
     if not tracker:
         raise HTTPException(status_code=404, detail="Tracker not found")
+    
+    # Then verify the tracker belongs to the current user
+    if tracker.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to access this tracker")
     
     expenses = db.query(models.Expense).filter(models.Expense.trackerId == trackerId).all()
     return expenses
 
 @app.post("/expenses", response_model=schemas.Expense, status_code=status.HTTP_201_CREATED)
 def add_expense(expense_in: schemas.ExpenseCreate, current_user: models.User = Depends(auth.get_current_active_user), db: Session = Depends(get_db)):
-    # Verify tracker exists and belongs to the current user
+    # First check if tracker exists at all
     tracker = db.query(models.ExpenseTracker).filter(
-        models.ExpenseTracker.id == expense_in.trackerId,
-        models.ExpenseTracker.user_id == current_user.id
+        models.ExpenseTracker.id == expense_in.trackerId
     ).first()
     if not tracker:
-        raise HTTPException(status_code=404, detail="Tracker not found for this expense")
+        raise HTTPException(status_code=404, detail="Tracker not found")
+    
+    # Then verify the tracker belongs to the current user
+    if tracker.user_id != current_user.id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to add expenses to this tracker")
 
     db_expense = models.Expense(**expense_in.model_dump())
     db.add(db_expense)
