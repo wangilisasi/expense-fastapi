@@ -38,6 +38,15 @@ class ExpenseBase(BaseModel):
 class ExpenseCreate(ExpenseBase):
     trackerId: int
 
+# --- Update Schemas ---
+class ExpenseTrackerUpdate(BaseModel):
+    """Schema for updating an expense tracker (PATCH - partial updates)"""
+    startDate: Optional[date] = None
+    endDate: Optional[date] = None
+    budget: Optional[float] = None
+    name: Optional[str] = None
+    description: Optional[str] = None
+
 class Expense(ExpenseBase):
     id: int
     trackerId: int
