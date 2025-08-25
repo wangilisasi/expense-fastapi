@@ -1,5 +1,6 @@
-from sqlalchemy import Column, Integer, String, Float, Date, ForeignKey
+from sqlalchemy import Column, Integer, String, Float, Date, ForeignKey, DateTime, Boolean
 from sqlalchemy.orm import relationship
+from datetime import datetime
 
 from app.database import Base
 
@@ -13,6 +14,7 @@ class User(Base):
     hashed_password = Column(String, nullable=False)
 
     expense_trackers = relationship("ExpenseTracker", back_populates="user")
+    refresh_tokens = relationship("RefreshToken", back_populates="user")
 
 class ExpenseTracker(Base):
     __tablename__ = "expensetracker"
@@ -37,4 +39,17 @@ class Expense(Base):
     date = Column(Date, nullable=False)
     trackerId = Column(Integer, ForeignKey("expensetracker.id"))
 
-    tracker = relationship("ExpenseTracker", back_populates="expenses") 
+    tracker = relationship("ExpenseTracker", back_populates="expenses")
+
+
+class RefreshToken(Base):
+    __tablename__ = "refresh_tokens"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    token = Column(String, unique=True, nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    expires_at = Column(DateTime, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    
+    user = relationship("User", back_populates="refresh_tokens") 
