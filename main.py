@@ -48,7 +48,7 @@ def register(user: schemas.UserCreate, db: Session = Depends(get_db)):
     return db_user
 
 
-@app.post("/login", response_model=schemas.Token)
+@app.post("/login", response_model=schemas.TokenPair)
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     user = auth.authenticate_user(db, form_data.username, form_data.password)
     if not user:
@@ -57,11 +57,61 @@ def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depend
             detail="Incorrect username or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
+    
+    # Create access token
     access_token_expires = timedelta(minutes=auth.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = auth.create_access_token(
         data={"sub": user.username}, expires_delta=access_token_expires
     )
+    
+    # Create refresh token
+    refresh_token = auth.create_refresh_token(db, user.id)
+    
+    return {
+        "access_token": access_token, 
+        "refresh_token": refresh_token,
+        "token_type": "bearer"
+    }
+
+
+@app.post("/refresh", response_model=schemas.Token)
+def refresh_access_token(refresh_request: schemas.RefreshTokenRequest, db: Session = Depends(get_db)):
+    """Refresh an access token using a refresh token."""
+    user = auth.verify_refresh_token(db, refresh_request.refresh_token)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired refresh token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    # Create new access token
+    access_token_expires = timedelta(minutes=auth.ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = auth.create_access_token(
+        data={"sub": user.username}, expires_delta=access_token_expires
+    )
+    
     return {"access_token": access_token, "token_type": "bearer"}
+
+
+@app.post("/logout")
+def logout(refresh_request: schemas.RefreshTokenRequest, db: Session = Depends(get_db)):
+    """Logout by revoking the refresh token."""
+    success = auth.revoke_refresh_token(db, refresh_request.refresh_token)
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid refresh token"
+        )
+    
+    return {"message": "Successfully logged out"}
+
+
+@app.post("/logout-all")
+def logout_all_devices(current_user: models.User = Depends(auth.get_current_active_user), db: Session = Depends(get_db)):
+    """Logout from all devices by revoking all refresh tokens for the user."""
+    auth.revoke_all_refresh_tokens(db, current_user.id)
+    return {"message": "Successfully logged out from all devices"}
 
 
 @app.get("/me", response_model=schemas.User)
