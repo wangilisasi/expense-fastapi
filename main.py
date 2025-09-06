@@ -195,7 +195,9 @@ def get_expenses_for_tracker(trackerId: int, current_user: models.User = Depends
     if tracker.user_id != current_user.id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to access this tracker")
     
-    expenses = db.query(models.Expense).filter(models.Expense.trackerId == trackerId).all()
+    expenses = db.query(models.Expense).filter(models.Expense.trackerId == trackerId)
+    .limit(10)
+    .all()
     return expenses
 
 @app.post("/expenses", response_model=schemas.Expense, status_code=status.HTTP_201_CREATED)
