@@ -198,7 +198,7 @@ def get_expenses_for_tracker(trackerId: int, current_user: models.User = Depends
     expenses = (db.query(models.Expense)
     .filter(models.Expense.trackerId == trackerId)
     .order_by(models.Expense.id.desc())
-    .limit(10)
+    .limit(5)
     .all()
     )
     return expenses
