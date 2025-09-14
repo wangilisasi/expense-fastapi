@@ -83,6 +83,7 @@ class ExpenseTrackerStats(BaseModel):
     budget: float
     remaining_days: int
     target_expenditure_per_day: float
+    average_expenditure_per_day: float
     total_expenditure: float
     todays_expenditure: float
     class Config:

@@ -168,6 +168,15 @@ def get_tracker_stats(id: int, current_user: models.User = Depends(auth.get_curr
        
     # Calculate total expenditure by summing all expenses (rounded to 2 decimal places)
     total_expenditure = round(sum(expense.amount for expense in tracker.expenses), 2)
+    
+    # Calculate average expenditure per day so far (from startDate to today or endDate, whichever is earlier)
+    period_end_for_avg = min(today, tracker.endDate)
+    if period_end_for_avg < tracker.startDate:
+        elapsed_days = 0
+    else:
+        elapsed_days = (period_end_for_avg - tracker.startDate).days + 1
+    average_expenditure_per_day = round(total_expenditure / elapsed_days, 2) if elapsed_days > 0 else 0
+
     # Calculate target expenditure per day (rounded to 2 decimal places)
     target_expenditure_per_day = round((tracker.budget-total_expenditure) / remaining_days if remaining_days > 0 else 0, 2)
 
@@ -178,6 +187,7 @@ def get_tracker_stats(id: int, current_user: models.User = Depends(auth.get_curr
         budget=round(tracker.budget, 2),
         remaining_days=remaining_days,
         target_expenditure_per_day=target_expenditure_per_day,
+        average_expenditure_per_day=average_expenditure_per_day,
         total_expenditure=total_expenditure,
         todays_expenditure=todays_expenditure,
     )
