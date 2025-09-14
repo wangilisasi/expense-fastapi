@@ -241,12 +241,12 @@ def delete_expense(id: int, current_user: models.User = Depends(auth.get_current
     db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
-@app.get("/trackers/{id}/daily-expenses", response_model=schemas.DailyExpensesResponse)
-def get_daily_expenses(id: int, current_user: models.User = Depends(auth.get_current_active_user), db: Session = Depends(get_db)):
+@app.get("/trackers/{trackerId}/daily-expenses", response_model=schemas.DailyExpensesResponse)
+def get_daily_expenses(trackerId: int, current_user: models.User = Depends(auth.get_current_active_user), db: Session = Depends(get_db)):
     """Get daily expense totals grouped by date for a specific tracker"""
     # First check if tracker exists and belongs to the current user
     tracker = db.query(models.ExpenseTracker).filter(
-        models.ExpenseTracker.id == id,
+        models.ExpenseTracker.id == trackerId,
         models.ExpenseTracker.user_id == current_user.id
     ).first()
     
@@ -256,7 +256,7 @@ def get_daily_expenses(id: int, current_user: models.User = Depends(auth.get_cur
     # Get all expenses for this tracker, ordered by date descending
     expenses = (
         db.query(models.Expense)
-        .filter(models.Expense.trackerId == id)
+        .filter(models.Expense.trackerId == trackerId)
         .order_by(models.Expense.date.desc(), models.Expense.id.desc())
         .all()
     )
@@ -286,6 +286,9 @@ def get_daily_expenses(id: int, current_user: models.User = Depends(auth.get_cur
     # Convert to list and sort by date (most recent first)
     daily_expenses_list = list(daily_expenses_dict.values())
     daily_expenses_list.sort(key=lambda x: x["date"], reverse=True)
+    
+    # Limit to 5 most recent days
+    daily_expenses_list = daily_expenses_list[:5]
     
     # Round the total amounts to 2 decimal places
     for day in daily_expenses_list:
