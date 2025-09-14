@@ -88,3 +88,21 @@ class ExpenseTrackerStats(BaseModel):
     class Config:
         from_attributes = True
 
+# --- Daily Expense Schemas ---
+
+class DailyExpenseTransaction(BaseModel):
+    id: int
+    name: str
+    amount: float
+    
+    class Config:
+        from_attributes = True
+
+class DailyExpenseGroup(BaseModel):
+    date: date
+    total_amount: float
+    transactions: List[DailyExpenseTransaction]
+
+class DailyExpensesResponse(BaseModel):
+    daily_expenses: List[DailyExpenseGroup]
+

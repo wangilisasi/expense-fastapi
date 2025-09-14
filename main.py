@@ -240,3 +240,55 @@ def delete_expense(id: int, current_user: models.User = Depends(auth.get_current
     db.delete(expense)
     db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+@app.get("/trackers/{id}/daily-expenses", response_model=schemas.DailyExpensesResponse)
+def get_daily_expenses(id: int, current_user: models.User = Depends(auth.get_current_active_user), db: Session = Depends(get_db)):
+    """Get daily expense totals grouped by date for a specific tracker"""
+    # First check if tracker exists and belongs to the current user
+    tracker = db.query(models.ExpenseTracker).filter(
+        models.ExpenseTracker.id == id,
+        models.ExpenseTracker.user_id == current_user.id
+    ).first()
+    
+    if not tracker:
+        raise HTTPException(status_code=404, detail="Tracker not found")
+    
+    # Get all expenses for this tracker, ordered by date descending
+    expenses = (
+        db.query(models.Expense)
+        .filter(models.Expense.trackerId == id)
+        .order_by(models.Expense.date.desc(), models.Expense.id.desc())
+        .all()
+    )
+    
+    # Group expenses by date
+    daily_expenses_dict = {}
+    for expense in expenses:
+        expense_date = expense.date
+        
+        if expense_date not in daily_expenses_dict:
+            daily_expenses_dict[expense_date] = {
+                "date": expense_date,
+                "total_amount": 0,
+                "transactions": []
+            }
+        
+        # Add expense to the day's transactions
+        daily_expenses_dict[expense_date]["transactions"].append({
+            "id": expense.id,
+            "name": expense.description,
+            "amount": expense.amount
+        })
+        
+        # Add to daily total
+        daily_expenses_dict[expense_date]["total_amount"] += expense.amount
+    
+    # Convert to list and sort by date (most recent first)
+    daily_expenses_list = list(daily_expenses_dict.values())
+    daily_expenses_list.sort(key=lambda x: x["date"], reverse=True)
+    
+    # Round the total amounts to 2 decimal places
+    for day in daily_expenses_list:
+        day["total_amount"] = round(day["total_amount"], 2)
+    
+    return schemas.DailyExpensesResponse(daily_expenses=daily_expenses_list)
