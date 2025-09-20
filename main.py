@@ -74,9 +74,9 @@ def get_current_user_info(current_user: models.User = Depends(auth.get_current_a
 @app.get("/trackers", response_model=List[schemas.ExpenseTracker])
 def get_trackers(current_user: models.User = Depends(auth.get_current_active_user), db: Session = Depends(get_db)):
     try:
-        # Query trackers for the current user
+        # Query trackers for the current user using UUID
         trackers = db.query(models.ExpenseTracker).filter(
-            models.ExpenseTracker.user_id == current_user.id
+            models.ExpenseTracker.uuid_user_id == current_user.uuid_id
         ).all()
         
         # Return trackers (empty list if none found)
@@ -90,18 +90,18 @@ def get_trackers(current_user: models.User = Depends(auth.get_current_active_use
 
 @app.post("/trackers", response_model=schemas.ExpenseTracker)
 def create_tracker(tracker: schemas.ExpenseTrackerCreate, current_user: models.User = Depends(auth.get_current_active_user), db: Session = Depends(get_db)):
-    db_tracker = models.ExpenseTracker(**tracker.model_dump(), user_id=current_user.id)
+    db_tracker = models.ExpenseTracker(**tracker.model_dump(), uuid_user_id=current_user.uuid_id, user_id=current_user.id)
     db.add(db_tracker)
     db.commit()
     db.refresh(db_tracker)
     return db_tracker
 
-@app.get("/trackers/{id}", response_model=schemas.ExpenseTrackerWithExpenses)
-def get_tracker_details(id: int, current_user: models.User = Depends(auth.get_current_active_user), db: Session = Depends(get_db)):
+@app.get("/trackers/{uuid_id}", response_model=schemas.ExpenseTrackerWithExpenses)
+def get_tracker_details(uuid_id: str, current_user: models.User = Depends(auth.get_current_active_user), db: Session = Depends(get_db)):
     # First check if tracker exists at all
     tracker = (
         db.query(models.ExpenseTracker)
-        .filter(models.ExpenseTracker.id == id)
+        .filter(models.ExpenseTracker.uuid_id == uuid_id)
         .options(selectinload(models.ExpenseTracker.expenses))
         .first()
     )
@@ -109,18 +109,18 @@ def get_tracker_details(id: int, current_user: models.User = Depends(auth.get_cu
         raise HTTPException(status_code=404, detail="Tracker not found")
     
     # Then verify the tracker belongs to the current user
-    if tracker.user_id != current_user.id:
+    if tracker.uuid_user_id != current_user.uuid_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to access this tracker")
     
     return tracker
 
-@app.patch("/trackers/{id}", response_model=schemas.ExpenseTracker)
-def update_tracker(id: int, tracker_update: schemas.ExpenseTrackerUpdate, current_user: models.User = Depends(auth.get_current_active_user), db: Session = Depends(get_db)):
+@app.patch("/trackers/{uuid_id}", response_model=schemas.ExpenseTracker)
+def update_tracker(uuid_id: str, tracker_update: schemas.ExpenseTrackerUpdate, current_user: models.User = Depends(auth.get_current_active_user), db: Session = Depends(get_db)):
     """Update an expense tracker (PATCH - only specified fields)"""
     # Get the existing tracker
     db_tracker = db.query(models.ExpenseTracker).filter(
-        models.ExpenseTracker.id == id,
-        models.ExpenseTracker.user_id == current_user.id
+        models.ExpenseTracker.uuid_id == uuid_id,
+        models.ExpenseTracker.uuid_user_id == current_user.uuid_id
     ).first()
     
     if not db_tracker:
@@ -135,12 +135,12 @@ def update_tracker(id: int, tracker_update: schemas.ExpenseTrackerUpdate, curren
     db.refresh(db_tracker)
     return db_tracker
 
-@app.get("/trackers/{id}/stats", response_model=schemas.ExpenseTrackerStats)
-def get_tracker_stats(id: int, current_user: models.User = Depends(auth.get_current_active_user), db: Session = Depends(get_db)):
+@app.get("/trackers/{uuid_id}/stats", response_model=schemas.ExpenseTrackerStats)
+def get_tracker_stats(uuid_id: str, current_user: models.User = Depends(auth.get_current_active_user), db: Session = Depends(get_db)):
     # First check if tracker exists and belongs to the current user
     tracker = (
         db.query(models.ExpenseTracker)
-        .filter(models.ExpenseTracker.id == id)
+        .filter(models.ExpenseTracker.uuid_id == uuid_id)
         .options(selectinload(models.ExpenseTracker.expenses))
         .first()
     )
@@ -148,7 +148,7 @@ def get_tracker_stats(id: int, current_user: models.User = Depends(auth.get_curr
         raise HTTPException(status_code=404, detail="Tracker not found")
     
     # Verify the tracker belongs to the current user
-    if tracker.user_id != current_user.id:
+    if tracker.uuid_user_id != current_user.uuid_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to access this tracker")
     
     # Calculate stats
@@ -194,20 +194,20 @@ def get_tracker_stats(id: int, current_user: models.User = Depends(auth.get_curr
 
 # --- Expense Endpoints ---
 
-@app.get("/trackers/{trackerId}/expenses", response_model=List[schemas.Expense])
-def get_expenses_for_tracker(trackerId: int, current_user: models.User = Depends(auth.get_current_active_user), db: Session = Depends(get_db)):
+@app.get("/trackers/{tracker_uuid_id}/expenses", response_model=List[schemas.Expense])
+def get_expenses_for_tracker(tracker_uuid_id: str, current_user: models.User = Depends(auth.get_current_active_user), db: Session = Depends(get_db)):
     # First check if tracker exists at all
-    tracker = db.query(models.ExpenseTracker).filter(models.ExpenseTracker.id == trackerId).first()
+    tracker = db.query(models.ExpenseTracker).filter(models.ExpenseTracker.uuid_id == tracker_uuid_id).first()
     if not tracker:
         raise HTTPException(status_code=404, detail="Tracker not found")
     
     # Then verify the tracker belongs to the current user
-    if tracker.user_id != current_user.id:
+    if tracker.uuid_user_id != current_user.uuid_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to access this tracker")
     
     expenses = (db.query(models.Expense)
-    .filter(models.Expense.trackerId == trackerId)
-    .order_by(models.Expense.id.desc())
+    .filter(models.Expense.uuid_tracker_id == tracker_uuid_id)
+    .order_by(models.Expense.uuid_id.desc())
     .limit(5)
     .all()
     )
@@ -217,31 +217,34 @@ def get_expenses_for_tracker(trackerId: int, current_user: models.User = Depends
 def add_expense(expense_in: schemas.ExpenseCreate, current_user: models.User = Depends(auth.get_current_active_user), db: Session = Depends(get_db)):
     # First check if tracker exists at all
     tracker = db.query(models.ExpenseTracker).filter(
-        models.ExpenseTracker.id == expense_in.trackerId
+        models.ExpenseTracker.uuid_id == expense_in.uuid_tracker_id
     ).first()
     if not tracker:
         raise HTTPException(status_code=404, detail="Tracker not found")
     
     # Then verify the tracker belongs to the current user
-    if tracker.user_id != current_user.id:
+    if tracker.uuid_user_id != current_user.uuid_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to add expenses to this tracker")
 
-    db_expense = models.Expense(**expense_in.model_dump())
+    # Create expense with both UUID and old integer foreign keys for compatibility
+    expense_data = expense_in.model_dump()
+    expense_data['trackerId'] = tracker.id  # Set the old integer foreign key for compatibility
+    db_expense = models.Expense(**expense_data)
     db.add(db_expense)
     db.commit()
     db.refresh(db_expense)
     return db_expense
 
-@app.delete("/expenses/{id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_expense(id: int, current_user: models.User = Depends(auth.get_current_active_user), db: Session = Depends(get_db)):
-    expense = db.get(models.Expense, id)
+@app.delete("/expenses/{uuid_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_expense(uuid_id: str, current_user: models.User = Depends(auth.get_current_active_user), db: Session = Depends(get_db)):
+    expense = db.query(models.Expense).filter(models.Expense.uuid_id == uuid_id).first()
     if not expense:
         raise HTTPException(status_code=404, detail="Expense not found")
     
     # Verify the expense belongs to a tracker owned by the current user
     tracker = db.query(models.ExpenseTracker).filter(
-        models.ExpenseTracker.id == expense.trackerId,
-        models.ExpenseTracker.user_id == current_user.id
+        models.ExpenseTracker.uuid_id == expense.uuid_tracker_id,
+        models.ExpenseTracker.uuid_user_id == current_user.uuid_id
     ).first()
     if not tracker:
         # The expense exists but the current user does not own the associated tracker
@@ -251,13 +254,13 @@ def delete_expense(id: int, current_user: models.User = Depends(auth.get_current
     db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
-@app.get("/trackers/{trackerId}/daily-expenses", response_model=schemas.DailyExpensesResponse)
-def get_daily_expenses(trackerId: int, current_user: models.User = Depends(auth.get_current_active_user), db: Session = Depends(get_db)):
+@app.get("/trackers/{tracker_uuid_id}/daily-expenses", response_model=schemas.DailyExpensesResponse)
+def get_daily_expenses(tracker_uuid_id: str, current_user: models.User = Depends(auth.get_current_active_user), db: Session = Depends(get_db)):
     """Get daily expense totals grouped by date for a specific tracker"""
     # First check if tracker exists and belongs to the current user
     tracker = db.query(models.ExpenseTracker).filter(
-        models.ExpenseTracker.id == trackerId,
-        models.ExpenseTracker.user_id == current_user.id
+        models.ExpenseTracker.uuid_id == tracker_uuid_id,
+        models.ExpenseTracker.uuid_user_id == current_user.uuid_id
     ).first()
     
     if not tracker:
@@ -266,8 +269,8 @@ def get_daily_expenses(trackerId: int, current_user: models.User = Depends(auth.
     # Get all expenses for this tracker, ordered by date descending
     expenses = (
         db.query(models.Expense)
-        .filter(models.Expense.trackerId == trackerId)
-        .order_by(models.Expense.date.desc(), models.Expense.id.desc())
+        .filter(models.Expense.uuid_tracker_id == tracker_uuid_id)
+        .order_by(models.Expense.date.desc(), models.Expense.uuid_id.desc())
         .all()
     )
     
@@ -285,7 +288,8 @@ def get_daily_expenses(trackerId: int, current_user: models.User = Depends(auth.
         
         # Add expense to the day's transactions
         daily_expenses_dict[expense_date]["transactions"].append({
-            "id": expense.id,
+            "uuid_id": expense.uuid_id,
+            "id": expense.id,  # Keep for backward compatibility
             "name": expense.description,
             "amount": expense.amount
         })
