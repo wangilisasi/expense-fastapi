@@ -90,11 +90,44 @@ def get_trackers(current_user: models.User = Depends(auth.get_current_active_use
 
 @app.post("/trackers", response_model=schemas.ExpenseTracker)
 def create_tracker(tracker: schemas.ExpenseTrackerCreate, current_user: models.User = Depends(auth.get_current_active_user), db: Session = Depends(get_db)):
-    db_tracker = models.ExpenseTracker(**tracker.model_dump(), uuid_user_id=current_user.uuid_id, user_id=current_user.id)
-    db.add(db_tracker)
-    db.commit()
-    db.refresh(db_tracker)
-    return db_tracker
+    try:
+        # Validate tracker data
+        if tracker.budget <= 0:
+            raise HTTPException(status_code=400, detail="Budget must be greater than 0")
+        
+        if tracker.startDate > tracker.endDate:
+            raise HTTPException(status_code=400, detail="Start date cannot be after end date")
+        
+        if not tracker.name or len(tracker.name.strip()) == 0:
+            raise HTTPException(status_code=400, detail="Tracker name cannot be empty")
+        
+        # Create tracker with both UUID and old integer foreign keys for compatibility
+        db_tracker = models.ExpenseTracker(
+            **tracker.model_dump(), 
+            uuid_user_id=current_user.uuid_id, 
+            user_id=current_user.id
+        )
+        
+        db.add(db_tracker)
+        db.commit()
+        db.refresh(db_tracker)
+        return db_tracker
+        
+    except HTTPException:
+        # Re-raise HTTP exceptions (these are already properly formatted)
+        raise
+    except ValueError as e:
+        # Handle data validation errors
+        db.rollback()
+        raise HTTPException(status_code=400, detail=f"Invalid data provided: {str(e)}")
+    except Exception as e:
+        # Handle any other database or unexpected errors
+        db.rollback()
+        print(f"Database error in create_tracker: {str(e)}")
+        raise HTTPException(
+            status_code=500, 
+            detail="Failed to create tracker. Please check your data and try again."
+        )
 
 @app.get("/trackers/{uuid_id}", response_model=schemas.ExpenseTrackerWithExpenses)
 def get_tracker_details(uuid_id: str, current_user: models.User = Depends(auth.get_current_active_user), db: Session = Depends(get_db)):
@@ -215,25 +248,60 @@ def get_expenses_for_tracker(tracker_uuid_id: str, current_user: models.User = D
 
 @app.post("/expenses", response_model=schemas.Expense, status_code=status.HTTP_201_CREATED)
 def add_expense(expense_in: schemas.ExpenseCreate, current_user: models.User = Depends(auth.get_current_active_user), db: Session = Depends(get_db)):
-    # First check if tracker exists at all
-    tracker = db.query(models.ExpenseTracker).filter(
-        models.ExpenseTracker.uuid_id == expense_in.uuid_tracker_id
-    ).first()
-    if not tracker:
-        raise HTTPException(status_code=404, detail="Tracker not found")
-    
-    # Then verify the tracker belongs to the current user
-    if tracker.uuid_user_id != current_user.uuid_id:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to add expenses to this tracker")
-
-    # Create expense with both UUID and old integer foreign keys for compatibility
-    expense_data = expense_in.model_dump()
-    expense_data['trackerId'] = tracker.id  # Set the old integer foreign key for compatibility
-    db_expense = models.Expense(**expense_data)
-    db.add(db_expense)
-    db.commit()
-    db.refresh(db_expense)
-    return db_expense
+    try:
+        # First check if tracker exists at all
+        tracker = db.query(models.ExpenseTracker).filter(
+            models.ExpenseTracker.uuid_id == expense_in.uuid_tracker_id
+        ).first()
+        if not tracker:
+            raise HTTPException(status_code=404, detail="Tracker not found")
+        
+        # Then verify the tracker belongs to the current user
+        if tracker.uuid_user_id != current_user.uuid_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to add expenses to this tracker")
+        
+        # Validate expense data
+        if expense_in.amount <= 0:
+            raise HTTPException(status_code=400, detail="Expense amount must be greater than 0")
+        
+        if not expense_in.description or len(expense_in.description.strip()) == 0:
+            raise HTTPException(status_code=400, detail="Expense description cannot be empty")
+        
+        # Create expense with both UUID and old integer foreign keys for compatibility
+        expense_data = expense_in.model_dump()
+        
+        # Ensure tracker.id is available for backward compatibility
+        if tracker.id is None:
+            raise HTTPException(status_code=500, detail="Tracker missing required ID for compatibility")
+        
+        expense_data['trackerId'] = tracker.id  # Set the old integer foreign key for compatibility
+        
+        # Create the expense object
+        db_expense = models.Expense(**expense_data)
+        
+        # Add and commit to database
+        db.add(db_expense)
+        db.commit()
+        db.refresh(db_expense)
+        
+        return db_expense
+        
+    except HTTPException:
+        # Re-raise HTTP exceptions (these are already properly formatted)
+        raise
+    except ValueError as e:
+        # Handle data validation errors
+        db.rollback()
+        raise HTTPException(status_code=400, detail=f"Invalid data provided: {str(e)}")
+    except Exception as e:
+        # Handle any other database or unexpected errors
+        db.rollback()
+        # Log the actual error for debugging (you might want to use proper logging here)
+        print(f"Database error in add_expense: {str(e)}")
+        raise HTTPException(
+            status_code=500, 
+            detail="Failed to create expense. Please check your data and try again."
+        )
 
 @app.delete("/expenses/{uuid_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_expense(uuid_id: str, current_user: models.User = Depends(auth.get_current_active_user), db: Session = Depends(get_db)):
