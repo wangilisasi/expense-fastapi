@@ -101,11 +101,14 @@ def create_tracker(tracker: schemas.ExpenseTrackerCreate, current_user: models.U
         if not tracker.name or len(tracker.name.strip()) == 0:
             raise HTTPException(status_code=400, detail="Tracker name cannot be empty")
         
-        # Create tracker with both UUID and old integer foreign keys for compatibility
+        # Create tracker with UUID primary key
+        tracker_data = tracker.model_dump()
+        # Remove any 'id' field if present - not needed for UUID primary key
+        tracker_data.pop('id', None)
+        
         db_tracker = models.ExpenseTracker(
-            **tracker.model_dump(), 
-            uuid_user_id=current_user.uuid_id, 
-            user_id=current_user.id
+            **tracker_data, 
+            uuid_user_id=current_user.uuid_id
         )
         
         db.add(db_tracker)
@@ -267,14 +270,12 @@ def add_expense(expense_in: schemas.ExpenseCreate, current_user: models.User = D
         if not expense_in.description or len(expense_in.description.strip()) == 0:
             raise HTTPException(status_code=400, detail="Expense description cannot be empty")
         
-        # Create expense with both UUID and old integer foreign keys for compatibility
+        # Create expense with UUID primary key
         expense_data = expense_in.model_dump()
         
-        # Ensure tracker.id is available for backward compatibility
-        if tracker.id is None:
-            raise HTTPException(status_code=500, detail="Tracker missing required ID for compatibility")
-        
-        expense_data['trackerId'] = tracker.id  # Set the old integer foreign key for compatibility
+        # Remove any 'id' or 'trackerId' fields if present - not needed for UUID primary key
+        expense_data.pop('id', None)
+        expense_data.pop('trackerId', None)
         
         # Create the expense object
         db_expense = models.Expense(**expense_data)
@@ -357,7 +358,6 @@ def get_daily_expenses(tracker_uuid_id: str, current_user: models.User = Depends
         # Add expense to the day's transactions
         daily_expenses_dict[expense_date]["transactions"].append({
             "uuid_id": expense.uuid_id,
-            "id": expense.id,  # Keep for backward compatibility
             "name": expense.description,
             "amount": expense.amount
         })

@@ -8,9 +8,7 @@ from app.database import Base
 class User(Base):
     __tablename__ = "users"
 
-    # Keep old integer ID for backward compatibility during migration
-    id = Column(Integer, autoincrement=True)
-    # New UUID primary key
+    # UUID primary key
     uuid_id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     username = Column(String, unique=True, nullable=False, index=True)
     email = Column(String, unique=True, nullable=False, index=True)
@@ -21,18 +19,14 @@ class User(Base):
 class ExpenseTracker(Base):
     __tablename__ = "expensetracker"
 
-    # Keep old integer ID for backward compatibility during migration
-    id = Column(Integer, autoincrement=True)
-    # New UUID primary key
+    # UUID primary key
     uuid_id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     startDate = Column(Date, nullable=False)
     endDate = Column(Date, nullable=False)
     budget = Column(Float, nullable=False)
     name = Column(String, nullable=False)
     description = Column(String, nullable=True)
-    # Keep old foreign key for backward compatibility
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    # New UUID foreign key
+    # UUID foreign key
     uuid_user_id = Column(String(36), ForeignKey("users.uuid_id"), nullable=False)
 
     expenses = relationship("Expense", back_populates="tracker", foreign_keys="Expense.uuid_tracker_id")
@@ -41,16 +35,12 @@ class ExpenseTracker(Base):
 class Expense(Base):
     __tablename__ = "expense"
 
-    # Keep old integer ID for backward compatibility during migration
-    id = Column(Integer, autoincrement=True)
-    # New UUID primary key
+    # UUID primary key
     uuid_id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     description = Column(String, nullable=False)
     amount = Column(Float, nullable=False)
     date = Column(Date, nullable=False)
-    # Keep old foreign key for backward compatibility
-    trackerId = Column(Integer, ForeignKey("expensetracker.id"))
-    # New UUID foreign key
-    uuid_tracker_id = Column(String(36), ForeignKey("expensetracker.uuid_id"))
+    # UUID foreign key
+    uuid_tracker_id = Column(String(36), ForeignKey("expensetracker.uuid_id"), nullable=False)
 
     tracker = relationship("ExpenseTracker", back_populates="expenses", foreign_keys=[uuid_tracker_id]) 

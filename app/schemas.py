@@ -14,8 +14,6 @@ class UserCreate(UserBase):
 
 class User(UserBase):
     uuid_id: str
-    # Keep old id for backward compatibility during migration
-    id: Optional[int] = None
     class Config:
         from_attributes = True
 
@@ -40,8 +38,6 @@ class ExpenseBase(BaseModel):
 # --- Create Schemas ---
 class ExpenseCreate(ExpenseBase):
     uuid_tracker_id: str
-    # Keep old trackerId for backward compatibility during migration
-    trackerId: Optional[int] = None
 
 # --- Update Schemas ---
 class ExpenseTrackerUpdate(BaseModel):
@@ -55,9 +51,6 @@ class ExpenseTrackerUpdate(BaseModel):
 class Expense(ExpenseBase):
     uuid_id: str
     uuid_tracker_id: str
-    # Keep old fields for backward compatibility during migration
-    id: Optional[int] = None
-    trackerId: Optional[int] = None
     class Config:
         from_attributes = True
 
@@ -74,8 +67,6 @@ class ExpenseTrackerCreate(ExpenseTrackerBase):
 class ExpenseTracker(ExpenseTrackerBase):
     uuid_id: str
     expenses: List[Expense] = []
-    # Keep old id for backward compatibility during migration
-    id: Optional[int] = None
     class Config:
         from_attributes = True
 
@@ -105,8 +96,6 @@ class DailyExpenseTransaction(BaseModel):
     uuid_id: str
     name: str
     amount: float
-    # Keep old id for backward compatibility during migration
-    id: Optional[int] = None
     
     class Config:
         from_attributes = True
