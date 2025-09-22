@@ -3,6 +3,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from typing import List
 from datetime import timedelta, date
 from sqlalchemy.orm import Session, selectinload
+from collections import defaultdict
 
 from app.database import engine, get_db
 import app.models as models
@@ -344,37 +345,23 @@ def get_daily_expenses(tracker_uuid_id: str, current_user: models.User = Depends
         .all()
     )
     
-    # Group expenses by date
-    daily_expenses_dict = {}
+    # Group expenses by date using defaultdict
+    daily_groups = defaultdict(list)
     for expense in expenses:
-        expense_date = expense.date
-        
-        if expense_date not in daily_expenses_dict:
-            daily_expenses_dict[expense_date] = {
-                "date": expense_date,
-                "total_amount": 0,
-                "transactions": []
-            }
-        
-        # Add expense to the day's transactions
-        daily_expenses_dict[expense_date]["transactions"].append({
+        daily_groups[expense.date].append({
             "uuid_id": expense.uuid_id,
             "name": expense.description,
             "amount": expense.amount
         })
-        
-        # Add to daily total
-        daily_expenses_dict[expense_date]["total_amount"] += expense.amount
     
-    # Convert to list and sort by date (most recent first)
-    daily_expenses_list = list(daily_expenses_dict.values())
-    daily_expenses_list.sort(key=lambda x: x["date"], reverse=True)
-    
-    # Limit to 5 most recent days
-    daily_expenses_list = daily_expenses_list[:5]
-    
-    # Round the total amounts to 2 decimal places
-    for day in daily_expenses_list:
-        day["total_amount"] = round(day["total_amount"], 2)
+    # Create daily summaries, sort by date (most recent first), limit to 5 days, and round totals
+    daily_expenses_list = [
+        {
+            "date": expense_date,
+            "total_amount": round(sum(transaction["amount"] for transaction in transactions), 2),
+            "transactions": transactions
+        }
+        for expense_date, transactions in sorted(daily_groups.items(), reverse=True)
+    ][:5]
     
     return schemas.DailyExpensesResponse(daily_expenses=daily_expenses_list)
