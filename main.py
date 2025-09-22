@@ -340,7 +340,7 @@ def get_daily_expenses(tracker_uuid_id: str, current_user: models.User = Depends
     expenses = (
         db.query(models.Expense)
         .filter(models.Expense.uuid_tracker_id == tracker_uuid_id)
-        .order_by(models.Expense.date.desc(), models.Expense.uuid_id.desc())
+        .order_by(models.Expense.created_at.desc())
         .all()
     )
     
