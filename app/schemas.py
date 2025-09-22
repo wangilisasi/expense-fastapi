@@ -1,6 +1,6 @@
 from pydantic import BaseModel, ConfigDict
 from typing import List, Optional
-from datetime import date
+from datetime import date, datetime
 import uuid
 
 # --- Auth Schemas ---
@@ -51,6 +51,8 @@ class ExpenseTrackerUpdate(BaseModel):
 class Expense(ExpenseBase):
     uuid_id: str
     uuid_tracker_id: str
+    created_at: datetime
+    updated_at: datetime
     class Config:
         from_attributes = True
 

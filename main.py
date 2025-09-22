@@ -241,9 +241,10 @@ def get_expenses_for_tracker(tracker_uuid_id: str, current_user: models.User = D
     if tracker.uuid_user_id != current_user.uuid_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to access this tracker")
     
+   
     expenses = (db.query(models.Expense)
     .filter(models.Expense.uuid_tracker_id == tracker_uuid_id)
-    .order_by(models.Expense.uuid_id.desc())
+    .order_by(models.Expense.created_at.desc())
     .limit(5)
     .all()
     )

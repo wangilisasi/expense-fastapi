@@ -1,5 +1,6 @@
-from sqlalchemy import Column, Integer, String, Float, Date, ForeignKey
+from sqlalchemy import Column, Integer, String, Float, Date, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
+from datetime import datetime
 import uuid
 
 from app.database import Base
@@ -40,6 +41,8 @@ class Expense(Base):
     description = Column(String, nullable=False)
     amount = Column(Float, nullable=False)
     date = Column(Date, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     # UUID foreign key
     uuid_tracker_id = Column(String(36), ForeignKey("expensetracker.uuid_id"), nullable=False)
 
