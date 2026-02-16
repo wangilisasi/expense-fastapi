@@ -36,8 +36,8 @@ class ExpenseTracker(Base):
 class Expense(Base):
     __tablename__ = "expense"
 
-    # UUID primary key
-    uuid_id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    # UUID primary key - unique constraint ensures idempotent creation
+    uuid_id = Column(String(36), primary_key=True, unique=True, default=lambda: str(uuid.uuid4()))
     description = Column(String, nullable=False)
     amount = Column(Float, nullable=False)
     date = Column(Date, nullable=False)

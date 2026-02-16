@@ -37,6 +37,7 @@ class ExpenseBase(BaseModel):
 
 # --- Create Schemas ---
 class ExpenseCreate(ExpenseBase):
+    uuid_id: str  # Client-generated stable UUID for idempotent creation
     uuid_tracker_id: str
 
 # --- Update Schemas ---

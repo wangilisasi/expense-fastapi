@@ -5,6 +5,7 @@ These are happy-path tests to verify basic functionality works.
 Edge cases and error conditions are covered in other test files.
 """
 import pytest
+import uuid
 from datetime import date, timedelta
 
 
@@ -103,10 +104,12 @@ class TestExpenseCRUD:
 
     def test_create_expense(self, client, test_tracker, auth_headers):
         """Should create a new expense."""
+        expense_uuid = str(uuid.uuid4())
         response = client.post(
             "/expenses",
             headers=auth_headers,
             json={
+                "uuid_id": expense_uuid,
                 "description": "Lunch at cafe",
                 "amount": 15.50,
                 "date": str(date.today()),
@@ -116,10 +119,10 @@ class TestExpenseCRUD:
         assert response.status_code == 201
         
         data = response.json()
+        assert data["uuid_id"] == expense_uuid
         assert data["description"] == "Lunch at cafe"
         assert data["amount"] == 15.50
         assert data["uuid_tracker_id"] == test_tracker.uuid_id
-        assert "uuid_id" in data
         assert "created_at" in data
         assert "updated_at" in data
 

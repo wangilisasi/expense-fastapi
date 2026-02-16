@@ -5,6 +5,7 @@ These tests are CRITICAL. If authorization breaks, users can see/modify
 other users' financial data. This would be a serious security incident.
 """
 import pytest
+import uuid
 from datetime import date, timedelta
 
 
@@ -88,6 +89,7 @@ class TestExpenseAuthorization:
             "/expenses",
             headers=second_user_auth_headers,
             json={
+                "uuid_id": str(uuid.uuid4()),
                 "description": "Malicious expense",
                 "amount": 999.99,
                 "date": str(date.today()),
@@ -126,6 +128,7 @@ class TestExpenseAuthorization:
             "/expenses",
             headers=auth_headers,
             json={
+                "uuid_id": str(uuid.uuid4()),
                 "description": "Legitimate expense",
                 "amount": 25.00,
                 "date": str(date.today()),
@@ -171,6 +174,7 @@ class TestUnauthenticatedAccess:
     def test_add_expense_requires_auth(self, client, test_tracker):
         """POST /expenses should require authentication."""
         response = client.post("/expenses", json={
+            "uuid_id": str(uuid.uuid4()),
             "description": "Test",
             "amount": 10.00,
             "date": str(date.today()),

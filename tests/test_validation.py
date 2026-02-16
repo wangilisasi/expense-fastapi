@@ -5,6 +5,7 @@ These tests verify that your validation logic rejects bad data
 before it corrupts your database or causes calculation errors.
 """
 import pytest
+import uuid
 from datetime import date, timedelta
 
 
@@ -128,6 +129,7 @@ class TestExpenseValidation:
             "/expenses",
             headers=auth_headers,
             json={
+                "uuid_id": str(uuid.uuid4()),
                 "description": "Test expense",
                 "amount": -50,
                 "date": str(date.today()),
@@ -143,6 +145,7 @@ class TestExpenseValidation:
             "/expenses",
             headers=auth_headers,
             json={
+                "uuid_id": str(uuid.uuid4()),
                 "description": "Test expense",
                 "amount": 0,
                 "date": str(date.today()),
@@ -158,6 +161,7 @@ class TestExpenseValidation:
             "/expenses",
             headers=auth_headers,
             json={
+                "uuid_id": str(uuid.uuid4()),
                 "description": "",
                 "amount": 50,
                 "date": str(date.today()),
@@ -175,6 +179,7 @@ class TestExpenseValidation:
             "/expenses",
             headers=auth_headers,
             json={
+                "uuid_id": str(uuid.uuid4()),
                 "description": "   ",
                 "amount": 50,
                 "date": str(date.today()),
@@ -190,6 +195,7 @@ class TestExpenseValidation:
             "/expenses",
             headers=auth_headers,
             json={
+                "uuid_id": str(uuid.uuid4()),
                 "description": "Test expense",
                 "amount": 50,
                 "date": str(date.today()),
@@ -205,6 +211,7 @@ class TestExpenseValidation:
             "/expenses",
             headers=auth_headers,
             json={
+                "uuid_id": str(uuid.uuid4()),
                 "description": "Coffee",
                 "amount": 5.50,
                 "date": str(date.today()),
@@ -224,6 +231,7 @@ class TestExpenseValidation:
             "/expenses",
             headers=auth_headers,
             json={
+                "uuid_id": str(uuid.uuid4()),
                 "description": "Precise expense",
                 "amount": 123.45,
                 "date": str(date.today()),

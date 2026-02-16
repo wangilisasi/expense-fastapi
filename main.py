@@ -3,6 +3,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from typing import List
 from datetime import timedelta, date
 from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.exc import IntegrityError
 from collections import defaultdict
 
 from app.database import engine, get_db
@@ -251,58 +252,134 @@ def get_expenses_for_tracker(tracker_uuid_id: str, current_user: models.User = D
     )
     return expenses
 
-@app.post("/expenses", response_model=schemas.Expense, status_code=status.HTTP_201_CREATED)
-def add_expense(expense_in: schemas.ExpenseCreate, current_user: models.User = Depends(auth.get_current_active_user), db: Session = Depends(get_db)):
-    try:
-        # First check if tracker exists at all
-        tracker = db.query(models.ExpenseTracker).filter(
-            models.ExpenseTracker.uuid_id == expense_in.uuid_tracker_id
+@app.post("/expenses", response_model=schemas.Expense)
+def add_expense(
+    expense_in: schemas.ExpenseCreate,
+    response: Response,
+    current_user: models.User = Depends(auth.get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Create a new expense (idempotent).
+    
+    This endpoint supports idempotent creation for mobile clients with flaky networks.
+    The client must provide a stable `uuid_id` generated locally. If the same `uuid_id`
+    is sent multiple times (retries), only one expense row is created.
+    
+    Returns:
+        - 201 Created: New expense was created
+        - 200 OK: Expense already exists (duplicate/retry request)
+        - 403 Forbidden: User not authorized to add expenses to this tracker
+        - 404 Not Found: Tracker not found
+    """
+    # --- Authorization checks (must happen before any insert attempt) ---
+    
+    # First check if tracker exists at all
+    tracker = db.query(models.ExpenseTracker).filter(
+        models.ExpenseTracker.uuid_id == expense_in.uuid_tracker_id
+    ).first()
+    if not tracker:
+        raise HTTPException(status_code=404, detail="Tracker not found")
+    
+    # Then verify the tracker belongs to the current user
+    if tracker.uuid_user_id != current_user.uuid_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to add expenses to this tracker"
+        )
+    
+    # --- Input validation ---
+    
+    if expense_in.amount <= 0:
+        raise HTTPException(status_code=400, detail="Expense amount must be greater than 0")
+    
+    if not expense_in.description or len(expense_in.description.strip()) == 0:
+        raise HTTPException(status_code=400, detail="Expense description cannot be empty")
+    
+    # --- Idempotency check: look for existing expense with same uuid_id ---
+    
+    existing_expense = db.query(models.Expense).filter(
+        models.Expense.uuid_id == expense_in.uuid_id
+    ).first()
+    
+    if existing_expense:
+        # Verify the existing expense belongs to a tracker owned by this user
+        # (prevents information leakage about other users' expense IDs)
+        existing_tracker = db.query(models.ExpenseTracker).filter(
+            models.ExpenseTracker.uuid_id == existing_expense.uuid_tracker_id,
+            models.ExpenseTracker.uuid_user_id == current_user.uuid_id
         ).first()
-        if not tracker:
-            raise HTTPException(status_code=404, detail="Tracker not found")
         
-        # Then verify the tracker belongs to the current user
-        if tracker.uuid_user_id != current_user.uuid_id:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to add expenses to this tracker")
+        if not existing_tracker:
+            # The uuid_id exists but belongs to another user's expense
+            # Return 409 Conflict to indicate the ID is taken
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Expense ID already exists"
+            )
         
-        # Validate expense data
-        if expense_in.amount <= 0:
-            raise HTTPException(status_code=400, detail="Expense amount must be greater than 0")
-        
-        if not expense_in.description or len(expense_in.description.strip()) == 0:
-            raise HTTPException(status_code=400, detail="Expense description cannot be empty")
-        
-        # Create expense with UUID primary key
+        # Return existing expense with 200 OK (idempotent retry)
+        response.status_code = status.HTTP_200_OK
+        return existing_expense
+    
+    # --- Create new expense ---
+    
+    try:
         expense_data = expense_in.model_dump()
         
-        # Remove any 'id' or 'trackerId' fields if present - not needed for UUID primary key
+        # Remove any legacy fields if present
         expense_data.pop('id', None)
         expense_data.pop('trackerId', None)
         
-        # Create the expense object
         db_expense = models.Expense(**expense_data)
         
-        # Add and commit to database
         db.add(db_expense)
         db.commit()
         db.refresh(db_expense)
         
+        # New expense created successfully
+        response.status_code = status.HTTP_201_CREATED
         return db_expense
         
-    except HTTPException:
-        # Re-raise HTTP exceptions (these are already properly formatted)
-        raise
+    except IntegrityError:
+        # Race condition: another request inserted the same uuid_id between our
+        # check and insert. Rollback and fetch the existing row.
+        db.rollback()
+        
+        existing_expense = db.query(models.Expense).filter(
+            models.Expense.uuid_id == expense_in.uuid_id
+        ).first()
+        
+        if existing_expense:
+            # Verify ownership before returning
+            existing_tracker = db.query(models.ExpenseTracker).filter(
+                models.ExpenseTracker.uuid_id == existing_expense.uuid_tracker_id,
+                models.ExpenseTracker.uuid_user_id == current_user.uuid_id
+            ).first()
+            
+            if not existing_tracker:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Expense ID already exists"
+                )
+            
+            response.status_code = status.HTTP_200_OK
+            return existing_expense
+        
+        # If we still can't find it, something unexpected happened
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to create expense due to a conflict. Please retry."
+        )
+        
     except ValueError as e:
-        # Handle data validation errors
         db.rollback()
         raise HTTPException(status_code=400, detail=f"Invalid data provided: {str(e)}")
     except Exception as e:
-        # Handle any other database or unexpected errors
         db.rollback()
-        # Log the actual error for debugging (you might want to use proper logging here)
         print(f"Database error in add_expense: {str(e)}")
         raise HTTPException(
-            status_code=500, 
+            status_code=500,
             detail="Failed to create expense. Please check your data and try again."
         )
 
