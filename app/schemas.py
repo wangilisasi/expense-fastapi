@@ -1,7 +1,21 @@
 from pydantic import BaseModel, ConfigDict
 from typing import List, Optional
 from datetime import date, datetime
+from enum import Enum
 import uuid
+
+# --- Category Enum ---
+
+class CategoryEnum(str, Enum):
+    food = "Food"
+    transport = "Transport"
+    housing = "Housing"
+    entertainment = "Entertainment"
+    health = "Health"
+    shopping = "Shopping"
+    utilities = "Utilities"
+    education = "Education"
+    other = "Other"
 
 # --- Auth Schemas ---
 
@@ -34,6 +48,7 @@ class ExpenseBase(BaseModel):
     description: str
     amount: float
     date: date
+    category: CategoryEnum = CategoryEnum.other
 
 # --- Create Schemas ---
 class ExpenseCreate(ExpenseBase):
@@ -52,6 +67,7 @@ class ExpenseTrackerUpdate(BaseModel):
 class Expense(ExpenseBase):
     uuid_id: str
     uuid_tracker_id: str
+    category: CategoryEnum = CategoryEnum.other
     created_at: datetime
     updated_at: datetime
     class Config:
@@ -99,7 +115,8 @@ class DailyExpenseTransaction(BaseModel):
     uuid_id: str
     name: str
     amount: float
-    
+    category: CategoryEnum = CategoryEnum.other
+
     class Config:
         from_attributes = True
 
@@ -110,4 +127,18 @@ class DailyExpenseGroup(BaseModel):
 
 class DailyExpensesResponse(BaseModel):
     daily_expenses: List[DailyExpenseGroup]
+
+
+# --- Category Analytics Schemas ---
+
+class CategoryBreakdown(BaseModel):
+    category: CategoryEnum
+    total_amount: float
+    percentage: float        # % of total expenditure
+    expense_count: int
+
+class CategoryAnalyticsResponse(BaseModel):
+    tracker_uuid_id: str
+    total_expenditure: float
+    categories: List[CategoryBreakdown]
 

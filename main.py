@@ -5,6 +5,7 @@ from datetime import timedelta, date
 from sqlalchemy.orm import Session, selectinload
 from sqlalchemy.exc import IntegrityError
 from collections import defaultdict
+from app.schemas import CategoryEnum
 
 from app.database import engine, get_db
 import app.models as models
@@ -15,6 +16,18 @@ models.Base.metadata.create_all(bind=engine)
 
 
 app = FastAPI()
+
+
+# --- Categories Endpoint ---
+
+@app.get("/categories", response_model=List[str])
+def get_categories():
+    """Return the list of predefined expense categories.
+    
+    No authentication required — the Android app calls this once
+    to populate the category picker when creating/editing an expense.
+    """
+    return [category.value for category in CategoryEnum]
 
 
 # --- Auth Endpoints ---
@@ -428,7 +441,8 @@ def get_daily_expenses(tracker_uuid_id: str, current_user: models.User = Depends
         daily_groups[expense.date].append({
             "uuid_id": expense.uuid_id,
             "name": expense.description,
-            "amount": expense.amount
+            "amount": expense.amount,
+            "category": expense.category if expense.category else CategoryEnum.other.value,
         })
     
     # Create daily summaries, sort by date (most recent first), limit to 5 days, and round totals
@@ -442,3 +456,60 @@ def get_daily_expenses(tracker_uuid_id: str, current_user: models.User = Depends
     ][:5]
     
     return schemas.DailyExpensesResponse(daily_expenses=daily_expenses_list)
+
+
+@app.get("/trackers/{tracker_uuid_id}/analytics/categories", response_model=schemas.CategoryAnalyticsResponse)
+def get_category_analytics(
+    tracker_uuid_id: str,
+    current_user: models.User = Depends(auth.get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """Get spending breakdown by category for a specific tracker.
+    
+    Returns total amount, percentage of total spend, and expense count for each
+    category that has at least one expense. Categories with no expenses are omitted.
+    """
+    # Verify tracker exists and belongs to the current user
+    tracker = db.query(models.ExpenseTracker).filter(
+        models.ExpenseTracker.uuid_id == tracker_uuid_id,
+        models.ExpenseTracker.uuid_user_id == current_user.uuid_id
+    ).first()
+
+    if not tracker:
+        raise HTTPException(status_code=404, detail="Tracker not found")
+
+    # Fetch all expenses for this tracker
+    expenses = (
+        db.query(models.Expense)
+        .filter(models.Expense.uuid_tracker_id == tracker_uuid_id)
+        .all()
+    )
+
+    # Aggregate by category
+    category_totals: dict = defaultdict(lambda: {"total_amount": 0.0, "expense_count": 0})
+    total_expenditure = 0.0
+
+    for expense in expenses:
+        cat = expense.category if expense.category else CategoryEnum.other.value
+        category_totals[cat]["total_amount"] += expense.amount
+        category_totals[cat]["expense_count"] += 1
+        total_expenditure += expense.amount
+
+    total_expenditure = round(total_expenditure, 2)
+
+    # Build sorted breakdown (highest spend first)
+    categories = [
+        schemas.CategoryBreakdown(
+            category=cat,
+            total_amount=round(data["total_amount"], 2),
+            percentage=round((data["total_amount"] / total_expenditure) * 100, 2) if total_expenditure > 0 else 0.0,
+            expense_count=data["expense_count"],
+        )
+        for cat, data in sorted(category_totals.items(), key=lambda x: x[1]["total_amount"], reverse=True)
+    ]
+
+    return schemas.CategoryAnalyticsResponse(
+        tracker_uuid_id=tracker_uuid_id,
+        total_expenditure=total_expenditure,
+        categories=categories,
+    )
