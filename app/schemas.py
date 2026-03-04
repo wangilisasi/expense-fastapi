@@ -83,6 +83,16 @@ class ExpenseTrackerBase(BaseModel):
 class ExpenseTrackerCreate(ExpenseTrackerBase):
     pass
 
+class ExpenseTrackerSummary(ExpenseTrackerBase):
+    """Lightweight tracker schema — no expenses embedded.
+    
+    Used by GET /trackers (list) so the response stays small regardless
+    of how many expenses each tracker has accumulated.
+    """
+    uuid_id: str
+    class Config:
+        from_attributes = True
+
 class ExpenseTracker(ExpenseTrackerBase):
     uuid_id: str
     expenses: List[Expense] = []

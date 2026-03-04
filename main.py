@@ -86,8 +86,14 @@ def get_current_user_info(current_user: models.User = Depends(auth.get_current_a
 
 # --- ExpenseTracker Endpoints ---
 
-@app.get("/trackers", response_model=List[schemas.ExpenseTracker])
+@app.get("/trackers", response_model=List[schemas.ExpenseTrackerSummary])
 def get_trackers(current_user: models.User = Depends(auth.get_current_active_user), db: Session = Depends(get_db)):
+    """Return a lightweight summary list of the current user's trackers.
+
+    Expenses are intentionally excluded — fetch them per-tracker via
+    GET /trackers/{id}/expenses (full sync) or
+    GET /trackers/{id}/daily-expenses (UI preview).
+    """
     try:
         # Query trackers for the current user using UUID
         trackers = db.query(models.ExpenseTracker).filter(

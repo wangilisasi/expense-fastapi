@@ -42,6 +42,26 @@ class TestTrackerCRUD:
         assert len(trackers) >= 1
         assert any(t["uuid_id"] == test_tracker.uuid_id for t in trackers)
 
+    def test_list_trackers_does_not_include_expenses(
+        self, client, tracker_with_expenses, auth_headers
+    ):
+        """GET /trackers must return summaries only — no embedded expenses.
+
+        Embedding expenses bloats the list payload and forces the DB to
+        load every expense row just to render the tracker list screen.
+        """
+        response = client.get("/trackers", headers=auth_headers)
+        assert response.status_code == 200
+
+        for tracker in response.json():
+            assert "expenses" not in tracker, (
+                "Tracker list items must not contain an 'expenses' field. "
+                "Use GET /trackers/{id}/expenses for expense data."
+            )
+            # All summary fields must still be present
+            for field in ("uuid_id", "name", "budget", "startDate", "endDate"):
+                assert field in tracker
+
     def test_get_tracker_detail(self, client, test_tracker, auth_headers):
         """Should get tracker details with expenses."""
         response = client.get(
