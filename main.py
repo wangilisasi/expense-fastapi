@@ -7,13 +7,14 @@ from sqlalchemy.exc import IntegrityError
 from collections import defaultdict
 from app.schemas import CategoryEnum
 
-from app.database import engine, get_db
+from app.database import get_db
 import app.models as models
 import app.schemas as schemas
 import app.auth as auth
 
-models.Base.metadata.create_all(bind=engine)
-
+# NOTE: Database schema creation is NOT done here.
+# Tables are managed via Alembic migrations (`alembic upgrade head`).
+# For initial setup without Alembic, run: python init_db.py
 
 app = FastAPI()
 

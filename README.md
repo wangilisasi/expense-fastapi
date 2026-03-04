@@ -51,7 +51,22 @@ A robust FastAPI-based expense tracking application with PostgreSQL database int
    DATABASE_URL=postgresql://username:password@localhost:5432/expense_tracker
    ```
 
-5. **Run the application**
+5. **Set up the database schema**
+
+   > ⚠️ Schema creation is **not** run automatically on app startup (this keeps Vercel cold-starts fast). You must initialise the schema once manually.
+
+   **Option A — Alembic (recommended, already configured):**
+   ```bash
+   alembic upgrade head
+   ```
+
+   **Option B — init_db.py (initial setup only, no migration history):**
+   ```bash
+   python init_db.py
+   ```
+   Run this only once on a fresh database. For all future schema changes use Alembic migrations.
+
+6. **Run the application**
    ```bash
    hypercorn main:app --reload
    ```
