@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException, Response, status, Depends
 from fastapi.security import OAuth2PasswordRequestForm
-from typing import List
+from typing import List, Optional
 from datetime import timedelta, date
 from sqlalchemy.orm import Session, selectinload
 from sqlalchemy.exc import IntegrityError
@@ -246,24 +246,46 @@ def get_tracker_stats(uuid_id: str, current_user: models.User = Depends(auth.get
 # --- Expense Endpoints ---
 
 @app.get("/trackers/{tracker_uuid_id}/expenses", response_model=List[schemas.Expense])
-def get_expenses_for_tracker(tracker_uuid_id: str, current_user: models.User = Depends(auth.get_current_active_user), db: Session = Depends(get_db)):
+def get_expenses_for_tracker(
+    tracker_uuid_id: str,
+    limit: Optional[int] = None,
+    offset: int = 0,
+    current_user: models.User = Depends(auth.get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """Full sync endpoint — returns the complete expense history for a tracker.
+
+    Use this endpoint as the authoritative sync source for the mobile app.
+    It returns ALL expenses by default (no artificial cap), so a device that
+    resets its local DB can fully restore its history in one request.
+
+    Optional pagination (for large histories):
+        - limit  — max number of expenses to return
+        - offset — number of expenses to skip (default 0)
+
+    For a compact UI preview grouped by day, use
+    GET /trackers/{tracker_uuid_id}/daily-expenses instead.
+    """
     # First check if tracker exists at all
     tracker = db.query(models.ExpenseTracker).filter(models.ExpenseTracker.uuid_id == tracker_uuid_id).first()
     if not tracker:
         raise HTTPException(status_code=404, detail="Tracker not found")
-    
+
     # Then verify the tracker belongs to the current user
     if tracker.uuid_user_id != current_user.uuid_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to access this tracker")
-    
-   
-    expenses = (db.query(models.Expense)
-    .filter(models.Expense.uuid_tracker_id == tracker_uuid_id)
-    .order_by(models.Expense.created_at.desc())
-    .limit(5)
-    .all()
+
+    query = (
+        db.query(models.Expense)
+        .filter(models.Expense.uuid_tracker_id == tracker_uuid_id)
+        .order_by(models.Expense.created_at.desc())
+        .offset(offset)
     )
-    return expenses
+
+    if limit is not None:
+        query = query.limit(limit)
+
+    return query.all()
 
 @app.post("/expenses", response_model=schemas.Expense)
 def add_expense(

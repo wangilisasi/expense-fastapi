@@ -171,9 +171,8 @@ class TestExpenseCRUD:
         # Note: All have similar created_at, so order might vary
         # The main thing is the endpoint returns data
 
-    def test_expenses_limited_to_5(self, db, client, test_tracker, auth_headers):
-        """Endpoint should return at most 5 expenses."""
-        # Create 7 expenses
+    def test_expenses_returns_full_history(self, db, client, test_tracker, auth_headers):
+        """Default /expenses (no query params) must return all expenses — no artificial cap."""
         from app.models import Expense
         for i in range(7):
             expense = Expense(
@@ -184,15 +183,98 @@ class TestExpenseCRUD:
             )
             db.add(expense)
         db.commit()
-        
+
         response = client.get(
             f"/trackers/{test_tracker.uuid_id}/expenses",
             headers=auth_headers
         )
         assert response.status_code == 200
-        
         expenses = response.json()
-        assert len(expenses) == 5
+        assert len(expenses) == 7  # All expenses returned, not capped at 5
+
+    def test_expenses_pagination_limit(self, db, client, test_tracker, auth_headers):
+        """limit query param should cap the result set."""
+        from app.models import Expense
+        for i in range(7):
+            expense = Expense(
+                description=f"Expense {i}",
+                amount=10.00,
+                date=date.today(),
+                uuid_tracker_id=test_tracker.uuid_id
+            )
+            db.add(expense)
+        db.commit()
+
+        response = client.get(
+            f"/trackers/{test_tracker.uuid_id}/expenses?limit=3",
+            headers=auth_headers
+        )
+        assert response.status_code == 200
+        assert len(response.json()) == 3
+
+    def test_expenses_pagination_offset(self, db, client, test_tracker, auth_headers):
+        """offset query param should skip the given number of expenses."""
+        from app.models import Expense
+        for i in range(7):
+            expense = Expense(
+                description=f"Expense {i}",
+                amount=10.00,
+                date=date.today(),
+                uuid_tracker_id=test_tracker.uuid_id
+            )
+            db.add(expense)
+        db.commit()
+
+        response_all = client.get(
+            f"/trackers/{test_tracker.uuid_id}/expenses",
+            headers=auth_headers
+        )
+        response_offset = client.get(
+            f"/trackers/{test_tracker.uuid_id}/expenses?offset=4",
+            headers=auth_headers
+        )
+        assert response_offset.status_code == 200
+        all_ids = [e["uuid_id"] for e in response_all.json()]
+        offset_ids = [e["uuid_id"] for e in response_offset.json()]
+        # Offset results must be a strict tail of the full list
+        assert offset_ids == all_ids[4:]
+
+    def test_expenses_pagination_limit_and_offset(self, db, client, test_tracker, auth_headers):
+        """limit + offset together should return the correct page."""
+        from app.models import Expense
+        for i in range(7):
+            expense = Expense(
+                description=f"Expense {i}",
+                amount=10.00,
+                date=date.today(),
+                uuid_tracker_id=test_tracker.uuid_id
+            )
+            db.add(expense)
+        db.commit()
+
+        response_all = client.get(
+            f"/trackers/{test_tracker.uuid_id}/expenses",
+            headers=auth_headers
+        )
+        response_page = client.get(
+            f"/trackers/{test_tracker.uuid_id}/expenses?limit=2&offset=3",
+            headers=auth_headers
+        )
+        assert response_page.status_code == 200
+        all_ids = [e["uuid_id"] for e in response_all.json()]
+        page_ids = [e["uuid_id"] for e in response_page.json()]
+        assert len(page_ids) == 2
+        assert page_ids == all_ids[3:5]
+
+    def test_expenses_authorization_still_enforced(
+        self, client, test_tracker, test_expense, second_user_auth_headers
+    ):
+        """Pagination params must not bypass ownership checks."""
+        response = client.get(
+            f"/trackers/{test_tracker.uuid_id}/expenses?limit=10&offset=0",
+            headers=second_user_auth_headers
+        )
+        assert response.status_code == 403
 
 
 class TestTrackerWithExpenses:
