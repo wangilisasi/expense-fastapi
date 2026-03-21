@@ -12,9 +12,9 @@ class CategoryEnum(str, Enum):
     housing = "Housing"
     entertainment = "Entertainment"
     health = "Health"
-    shopping = "Shopping"
+    investing = "Investing"
     utilities = "Utilities"
-    education = "Education"
+    communications = "Communications"
     other = "Other"
 
 # --- Auth Schemas ---
@@ -151,4 +151,3 @@ class CategoryAnalyticsResponse(BaseModel):
     tracker_uuid_id: str
     total_expenditure: float
     categories: List[CategoryBreakdown]
-

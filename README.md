@@ -103,6 +103,8 @@ GET /trackers/{id}
 ```
 Returns tracker details including all associated expenses.
 
+Available expense categories: `Food`, `Transport`, `Housing`, `Entertainment`, `Health`, `Investing`, `Utilities`, `Communications`, `Other`.
+
 ### Expenses
 
 #### Get Expenses for Tracker
