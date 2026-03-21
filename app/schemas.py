@@ -11,7 +11,7 @@ class CategoryEnum(str, Enum):
     transport = "Transport"
     housing = "Housing"
     entertainment = "Entertainment"
-    health = "Health"
+    subscriptions = "Subscriptions"
     investing = "Investing"
     utilities = "Utilities"
     communications = "Communications"
