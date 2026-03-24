@@ -119,6 +119,54 @@ class TestTrackerValidation:
         )
         assert response.status_code == 200
 
+    def test_reject_overlapping_tracker_for_same_user(
+        self, client, test_tracker, auth_headers
+    ):
+        """Should reject creating a second budget that overlaps an existing one."""
+        response = client.post(
+            "/trackers",
+            headers=auth_headers,
+            json={
+                "name": "Overlap Budget",
+                "budget": 500,
+                "startDate": str(test_tracker.startDate + timedelta(days=1)),
+                "endDate": str(test_tracker.endDate),
+            }
+        )
+
+        assert response.status_code == 409
+        assert "overlaps this date range" in response.json()["detail"]
+
+    def test_reject_update_that_would_overlap_another_tracker(
+        self, db, client, test_user, test_tracker, auth_headers
+    ):
+        """Should reject editing a budget so it collides with another one."""
+        from app.models import ExpenseTracker
+
+        second_tracker = ExpenseTracker(
+            name="Future Budget",
+            description="Starts after the first budget ends",
+            budget=900.00,
+            startDate=test_tracker.endDate + timedelta(days=10),
+            endDate=test_tracker.endDate + timedelta(days=20),
+            uuid_user_id=test_user.uuid_id,
+        )
+        db.add(second_tracker)
+        db.commit()
+        db.refresh(second_tracker)
+
+        response = client.patch(
+            f"/trackers/{second_tracker.uuid_id}",
+            headers=auth_headers,
+            json={
+                "startDate": str(test_tracker.startDate + timedelta(days=5)),
+                "endDate": str(test_tracker.endDate + timedelta(days=5)),
+            },
+        )
+
+        assert response.status_code == 409
+        assert "overlaps this date range" in response.json()["detail"]
+
 
 class TestExpenseValidation:
     """Test validation rules for expenses."""

@@ -42,6 +42,30 @@ class TestTrackerCRUD:
         assert len(trackers) >= 1
         assert any(t["uuid_id"] == test_tracker.uuid_id for t in trackers)
 
+    def test_get_active_tracker(self, client, test_tracker, auth_headers):
+        """Should return the user's current active budget."""
+        response = client.get("/trackers/active", headers=auth_headers)
+
+        assert response.status_code == 200
+        assert response.json()["uuid_id"] == test_tracker.uuid_id
+
+    def test_create_second_non_overlapping_tracker(self, client, test_tracker, auth_headers):
+        """A user should be able to create a later budget without re-registering."""
+        response = client.post(
+            "/trackers",
+            headers=auth_headers,
+            json={
+                "name": "Next Month Budget",
+                "budget": 1800.00,
+                "startDate": str(test_tracker.endDate + timedelta(days=1)),
+                "endDate": str(test_tracker.endDate + timedelta(days=30)),
+                "description": "Budget after the current one ends"
+            }
+        )
+
+        assert response.status_code == 200
+        assert response.json()["name"] == "Next Month Budget"
+
     def test_list_trackers_does_not_include_expenses(
         self, client, tracker_with_expenses, auth_headers
     ):

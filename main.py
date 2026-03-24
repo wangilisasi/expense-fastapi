@@ -19,6 +19,26 @@ import app.auth as auth
 app = FastAPI()
 
 
+def _find_overlapping_tracker(
+    db: Session,
+    user_uuid_id: str,
+    start_date: date,
+    end_date: date,
+    exclude_uuid_id: Optional[str] = None,
+):
+    """Return an overlapping tracker for the same user, if one exists."""
+    query = db.query(models.ExpenseTracker).filter(
+        models.ExpenseTracker.uuid_user_id == user_uuid_id,
+        models.ExpenseTracker.startDate <= end_date,
+        models.ExpenseTracker.endDate >= start_date,
+    )
+
+    if exclude_uuid_id:
+        query = query.filter(models.ExpenseTracker.uuid_id != exclude_uuid_id)
+
+    return query.order_by(models.ExpenseTracker.startDate.desc()).first()
+
+
 # --- Categories Endpoint ---
 
 @app.get("/categories", response_model=List[str])
@@ -97,9 +117,12 @@ def get_trackers(current_user: models.User = Depends(auth.get_current_active_use
     """
     try:
         # Query trackers for the current user using UUID
-        trackers = db.query(models.ExpenseTracker).filter(
-            models.ExpenseTracker.uuid_user_id == current_user.uuid_id
-        ).all()
+        trackers = (
+            db.query(models.ExpenseTracker)
+            .filter(models.ExpenseTracker.uuid_user_id == current_user.uuid_id)
+            .order_by(models.ExpenseTracker.startDate.desc())
+            .all()
+        )
         
         # Return trackers (empty list if none found)
         return trackers
@@ -122,6 +145,18 @@ def create_tracker(tracker: schemas.ExpenseTrackerCreate, current_user: models.U
         
         if not tracker.name or len(tracker.name.strip()) == 0:
             raise HTTPException(status_code=400, detail="Tracker name cannot be empty")
+
+        overlapping_tracker = _find_overlapping_tracker(
+            db=db,
+            user_uuid_id=current_user.uuid_id,
+            start_date=tracker.startDate,
+            end_date=tracker.endDate,
+        )
+        if overlapping_tracker:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="You already have a budget that overlaps this date range",
+            )
         
         # Create tracker with UUID primary key
         tracker_data = tracker.model_dump()
@@ -154,6 +189,30 @@ def create_tracker(tracker: schemas.ExpenseTrackerCreate, current_user: models.U
             detail="Failed to create tracker. Please check your data and try again."
         )
 
+
+@app.get("/trackers/active", response_model=schemas.ExpenseTrackerSummary)
+def get_active_tracker(
+    current_user: models.User = Depends(auth.get_current_active_user),
+    db: Session = Depends(get_db),
+):
+    """Return the user's currently active budget tracker."""
+    today = date.today()
+    active_tracker = (
+        db.query(models.ExpenseTracker)
+        .filter(
+            models.ExpenseTracker.uuid_user_id == current_user.uuid_id,
+            models.ExpenseTracker.startDate <= today,
+            models.ExpenseTracker.endDate >= today,
+        )
+        .order_by(models.ExpenseTracker.startDate.desc())
+        .first()
+    )
+
+    if not active_tracker:
+        raise HTTPException(status_code=404, detail="No active budget found")
+
+    return active_tracker
+
 @app.get("/trackers/{uuid_id}", response_model=schemas.ExpenseTrackerWithExpenses)
 def get_tracker_details(uuid_id: str, current_user: models.User = Depends(auth.get_current_active_user), db: Session = Depends(get_db)):
     # First check if tracker exists at all
@@ -184,8 +243,36 @@ def update_tracker(uuid_id: str, tracker_update: schemas.ExpenseTrackerUpdate, c
     if not db_tracker:
         raise HTTPException(status_code=404, detail="Tracker not found")
     
-    # Update only the provided fields
     update_data = tracker_update.model_dump(exclude_unset=True)
+
+    updated_budget = update_data.get("budget", db_tracker.budget)
+    updated_start_date = update_data.get("startDate", db_tracker.startDate)
+    updated_end_date = update_data.get("endDate", db_tracker.endDate)
+    updated_name = update_data.get("name", db_tracker.name)
+
+    if updated_budget <= 0:
+        raise HTTPException(status_code=400, detail="Budget must be greater than 0")
+
+    if updated_start_date > updated_end_date:
+        raise HTTPException(status_code=400, detail="Start date cannot be after end date")
+
+    if not updated_name or len(updated_name.strip()) == 0:
+        raise HTTPException(status_code=400, detail="Tracker name cannot be empty")
+
+    overlapping_tracker = _find_overlapping_tracker(
+        db=db,
+        user_uuid_id=current_user.uuid_id,
+        start_date=updated_start_date,
+        end_date=updated_end_date,
+        exclude_uuid_id=uuid_id,
+    )
+    if overlapping_tracker:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="You already have a budget that overlaps this date range",
+        )
+
+    # Update only the provided fields
     for field, value in update_data.items():
         setattr(db_tracker, field, value)
     
