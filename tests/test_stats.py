@@ -5,7 +5,7 @@ These tests are IMPORTANT - they verify the financial calculations
 are correct. Wrong math = wrong budget guidance for users.
 """
 import pytest
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 from app.models import Expense, ExpenseTracker
 
@@ -250,6 +250,41 @@ class TestDailyExpenses:
         # Today: Coffee (5.50) + Lunch (15.00) = 20.50
         assert today_group["total_amount"] == 20.50
 
+    def test_daily_expenses_transactions_sorted_by_occurred_at(
+        self, db, client, test_tracker, auth_headers
+    ):
+        """Transactions inside a day should be newest first by user-facing time."""
+        expense_date = date.today()
+        early = Expense(
+            description="Breakfast",
+            amount=8.00,
+            date=expense_date,
+            occurred_at=datetime(2026, 7, 9, 8, 0, 0),
+            uuid_tracker_id=test_tracker.uuid_id
+        )
+        late = Expense(
+            description="Dinner",
+            amount=18.00,
+            date=expense_date,
+            occurred_at=datetime(2026, 7, 9, 20, 0, 0),
+            uuid_tracker_id=test_tracker.uuid_id
+        )
+        db.add(early)
+        db.add(late)
+        db.commit()
+
+        response = client.get(
+            f"/trackers/{test_tracker.uuid_id}/daily-expenses",
+            headers=auth_headers
+        )
+
+        assert response.status_code == 200
+        today_group = response.json()["daily_expenses"][0]
+        assert [transaction["name"] for transaction in today_group["transactions"]] == [
+            "Dinner",
+            "Breakfast",
+        ]
+
     def test_daily_expenses_empty_tracker(
         self, client, test_tracker, auth_headers
     ):
@@ -262,4 +297,3 @@ class TestDailyExpenses:
         data = response.json()
         
         assert data["daily_expenses"] == []
-

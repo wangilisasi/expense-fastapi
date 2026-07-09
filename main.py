@@ -592,11 +592,11 @@ def get_daily_expenses(tracker_uuid_id: str, current_user: models.User = Depends
     if not tracker:
         raise HTTPException(status_code=404, detail="Tracker not found")
     
-    # Get all expenses for this tracker, ordered by date descending
+    # Get all expenses for this tracker, ordered by user-facing occurrence time.
     expenses = (
         db.query(models.Expense)
         .filter(models.Expense.uuid_tracker_id == tracker_uuid_id)
-        .order_by(models.Expense.created_at.desc())
+        .order_by(models.Expense.date.desc(), models.Expense.occurred_at.desc())
         .all()
     )
     
