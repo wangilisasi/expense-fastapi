@@ -42,6 +42,7 @@ class Expense(Base):
     amount = Column(Float, nullable=False)
     date = Column(Date, nullable=False)
     category = Column(String, nullable=False, default="Other")
+    occurred_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     # UUID foreign key

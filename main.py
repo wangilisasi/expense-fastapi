@@ -459,6 +459,8 @@ def add_expense(
         # Remove any legacy fields if present
         expense_data.pop('id', None)
         expense_data.pop('trackerId', None)
+        if expense_data.get("occurred_at") is None:
+            expense_data["occurred_at"] = datetime.utcnow()
         
         db_expense = models.Expense(**expense_data)
         
@@ -570,6 +572,9 @@ def update_expense(
         category = update_data["category"]
         expense.category = category.value if isinstance(category, CategoryEnum) else category
 
+    if "occurred_at" in update_data and update_data["occurred_at"] is not None:
+        expense.occurred_at = update_data["occurred_at"]
+
     expense.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(expense)
@@ -603,6 +608,7 @@ def get_daily_expenses(tracker_uuid_id: str, current_user: models.User = Depends
             "name": expense.description,
             "amount": expense.amount,
             "category": expense.category if expense.category else CategoryEnum.other.value,
+            "occurred_at": expense.occurred_at,
             "created_at": expense.created_at,
             "updated_at": expense.updated_at,
         })

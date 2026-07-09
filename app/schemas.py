@@ -50,6 +50,7 @@ class ExpenseBase(BaseModel):
     amount: float
     date: date
     category: CategoryEnum = CategoryEnum.other
+    occurred_at: Optional[datetime] = None
 
 # --- Create Schemas ---
 class ExpenseCreate(ExpenseBase):
@@ -62,6 +63,7 @@ class ExpenseUpdate(BaseModel):
     amount: Optional[float] = None
     date: Optional[dt.date] = None
     category: Optional[CategoryEnum] = None
+    occurred_at: Optional[datetime] = None
 
 class ExpenseTrackerUpdate(BaseModel):
     """Schema for updating an expense tracker (PATCH - partial updates)"""
@@ -75,6 +77,7 @@ class Expense(ExpenseBase):
     uuid_id: str
     uuid_tracker_id: str
     category: CategoryEnum = CategoryEnum.other
+    occurred_at: datetime
     created_at: datetime
     updated_at: datetime
     class Config:
@@ -133,6 +136,7 @@ class DailyExpenseTransaction(BaseModel):
     name: str
     amount: float
     category: CategoryEnum = CategoryEnum.other
+    occurred_at: datetime
     created_at: datetime
     updated_at: datetime
 

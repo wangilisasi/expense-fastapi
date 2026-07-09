@@ -167,6 +167,7 @@ class TestExpenseCRUD:
         assert data["description"] == "Lunch at cafe"
         assert data["amount"] == 15.50
         assert data["uuid_tracker_id"] == test_tracker.uuid_id
+        assert "occurred_at" in data
         assert "created_at" in data
         assert "updated_at" in data
 
@@ -217,6 +218,7 @@ class TestExpenseCRUD:
         assert data["description"] == "Updated lunch"
         assert data["amount"] == 22.75
         assert data["category"] == "Food"
+        assert "occurred_at" in data
         assert data["updated_at"] >= data["created_at"]
 
     def test_update_expense_rejects_invalid_amount(self, client, test_expense, auth_headers):
