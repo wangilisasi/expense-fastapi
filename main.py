@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException, Response, status, Depends
 from fastapi.security import OAuth2PasswordRequestForm
 from typing import List, Optional
-from datetime import timedelta, date
+from datetime import timedelta, date, datetime
 from sqlalchemy.orm import Session, selectinload
 from sqlalchemy.exc import IntegrityError
 from collections import defaultdict
@@ -531,6 +531,50 @@ def delete_expense(uuid_id: str, current_user: models.User = Depends(auth.get_cu
     db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
+@app.patch("/expenses/{uuid_id}", response_model=schemas.Expense)
+def update_expense(
+    uuid_id: str,
+    expense_update: schemas.ExpenseUpdate,
+    current_user: models.User = Depends(auth.get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    expense = db.query(models.Expense).filter(models.Expense.uuid_id == uuid_id).first()
+    if not expense:
+        raise HTTPException(status_code=404, detail="Expense not found")
+
+    tracker = db.query(models.ExpenseTracker).filter(
+        models.ExpenseTracker.uuid_id == expense.uuid_tracker_id,
+        models.ExpenseTracker.uuid_user_id == current_user.uuid_id
+    ).first()
+    if not tracker:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to update this expense")
+
+    update_data = expense_update.model_dump(exclude_unset=True)
+
+    if "amount" in update_data and update_data["amount"] <= 0:
+        raise HTTPException(status_code=400, detail="Expense amount must be greater than 0")
+
+    if "description" in update_data:
+        description = update_data["description"]
+        if description is None or len(description.strip()) == 0:
+            raise HTTPException(status_code=400, detail="Expense description cannot be empty")
+        expense.description = description.strip()
+
+    if "amount" in update_data:
+        expense.amount = update_data["amount"]
+
+    if "date" in update_data:
+        expense.date = update_data["date"]
+
+    if "category" in update_data:
+        category = update_data["category"]
+        expense.category = category.value if isinstance(category, CategoryEnum) else category
+
+    expense.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(expense)
+    return expense
+
 @app.get("/trackers/{tracker_uuid_id}/daily-expenses", response_model=schemas.DailyExpensesResponse)
 def get_daily_expenses(tracker_uuid_id: str, current_user: models.User = Depends(auth.get_current_active_user), db: Session = Depends(get_db)):
     """Get daily expense totals grouped by date for a specific tracker"""
@@ -559,6 +603,8 @@ def get_daily_expenses(tracker_uuid_id: str, current_user: models.User = Depends
             "name": expense.description,
             "amount": expense.amount,
             "category": expense.category if expense.category else CategoryEnum.other.value,
+            "created_at": expense.created_at,
+            "updated_at": expense.updated_at,
         })
     
     # Create daily summaries, sort by date (most recent first), limit to 5 days, and round totals

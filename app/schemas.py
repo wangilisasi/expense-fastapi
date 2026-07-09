@@ -1,6 +1,7 @@
 from pydantic import BaseModel, ConfigDict
 from typing import List, Optional
 from datetime import date, datetime
+import datetime as dt
 from enum import Enum
 import uuid
 
@@ -56,6 +57,12 @@ class ExpenseCreate(ExpenseBase):
     uuid_tracker_id: str
 
 # --- Update Schemas ---
+class ExpenseUpdate(BaseModel):
+    description: Optional[str] = None
+    amount: Optional[float] = None
+    date: Optional[dt.date] = None
+    category: Optional[CategoryEnum] = None
+
 class ExpenseTrackerUpdate(BaseModel):
     """Schema for updating an expense tracker (PATCH - partial updates)"""
     startDate: Optional[date] = None
@@ -126,6 +133,8 @@ class DailyExpenseTransaction(BaseModel):
     name: str
     amount: float
     category: CategoryEnum = CategoryEnum.other
+    created_at: datetime
+    updated_at: datetime
 
     class Config:
         from_attributes = True

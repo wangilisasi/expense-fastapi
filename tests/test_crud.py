@@ -198,6 +198,36 @@ class TestExpenseCRUD:
         )
         assert response.status_code == 404
 
+    def test_update_expense(self, client, test_expense, auth_headers):
+        """Should update an existing expense."""
+        response = client.patch(
+            f"/expenses/{test_expense.uuid_id}",
+            headers=auth_headers,
+            json={
+                "description": "Updated lunch",
+                "amount": 22.75,
+                "date": str(date.today()),
+                "category": "Food"
+            }
+        )
+        assert response.status_code == 200
+
+        data = response.json()
+        assert data["uuid_id"] == test_expense.uuid_id
+        assert data["description"] == "Updated lunch"
+        assert data["amount"] == 22.75
+        assert data["category"] == "Food"
+        assert data["updated_at"] >= data["created_at"]
+
+    def test_update_expense_rejects_invalid_amount(self, client, test_expense, auth_headers):
+        """Should reject invalid expense updates."""
+        response = client.patch(
+            f"/expenses/{test_expense.uuid_id}",
+            headers=auth_headers,
+            json={"amount": 0}
+        )
+        assert response.status_code == 400
+
     def test_expenses_returned_in_order(
         self, client, tracker_with_expenses, auth_headers
     ):
@@ -337,4 +367,3 @@ class TestTrackerWithExpenses:
         data = response.json()
         assert "expenses" in data
         assert len(data["expenses"]) == 4  # We created 4 expenses in fixture
-
