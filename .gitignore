@@ -132,4 +132,5 @@ cython_debug/
 
 # VS Code
 .vscode/
-database.db 
+database.db
+.vercel

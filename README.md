@@ -49,6 +49,7 @@ A robust FastAPI-based expense tracking application with PostgreSQL database int
    Create a `.env` file in the root directory:
    ```env
    DATABASE_URL=postgresql://username:password@localhost:5432/expense_tracker
+   SECRET_KEY=generate-a-long-random-secret
    ```
 
 5. **Set up the database schema**
@@ -172,6 +173,7 @@ This application is deployed on [Railway](https://railway.app) with the followin
 
 ### Environment Variables
 - `DATABASE_URL`: PostgreSQL connection string (automatically provided by Railway)
+- `SECRET_KEY`: Long random secret used to sign JWT access tokens
 
 ## 📁 Project Structure
 
